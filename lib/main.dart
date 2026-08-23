@@ -1011,47 +1011,76 @@ class _MyBookingsScreenState
 // PROVIDER DETAILS SCREEN
 // ======================================================
 
-class ProviderDetailsScreen
-    extends StatelessWidget {
+// ======================================================
+// PROVIDER DETAILS SCREEN
+// ======================================================
+
+class ProviderDetailsScreen extends StatefulWidget {
   final ServiceProvider provider;
 
   const ProviderDetailsScreen({
     super.key,
     required this.provider,
   });
-  
 
-Future<void> bookService() async {
-  final response = await http.post(
-    Uri.parse(
-      'https://jsonplaceholder.typicode.com/posts',
-    ),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: jsonEncode({
-      'providerName': provider.name,
-      'service': provider.service,
-      'price': provider.price,
-    }),
-  );
-
-  print(
-    'Booking response: ${response.statusCode}',
-  );
-
-  if (response.statusCode == 201) {
-    bookings.add(
-      Booking(
-        provider.name,
-        provider.service,
-        provider.price,
-      ),
-    );
-  } else {
-    throw Exception('Booking failed');
-  }
+  @override
+  State<ProviderDetailsScreen> createState() =>
+      _ProviderDetailsScreenState();
 }
+
+class _ProviderDetailsScreenState
+    extends State<ProviderDetailsScreen> {
+
+  // ======================================================
+  // BOOK SERVICE
+  // ======================================================
+
+  Future<void> bookService() async {
+    // Prevent duplicate booking
+    final alreadyBooked = bookings.any(
+      (booking) =>
+          booking.providerName == widget.provider.name &&
+          booking.service == widget.provider.service,
+    );
+
+    if (alreadyBooked) {
+      throw Exception('Already booked');
+    }
+
+    final response = await http.post(
+      Uri.parse(
+        'https://jsonplaceholder.typicode.com/posts',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'providerName': widget.provider.name,
+        'service': widget.provider.service,
+        'price': widget.provider.price,
+      }),
+    );
+
+    print(
+      'Booking response: ${response.statusCode}',
+    );
+
+    if (response.statusCode == 201) {
+      bookings.add(
+        Booking(
+          widget.provider.name,
+          widget.provider.service,
+          widget.provider.price,
+        ),
+      );
+    } else {
+      throw Exception('Booking failed');
+    }
+  }
+
+  // ======================================================
+  // BUILD
+  // ======================================================
 
   @override
   Widget build(BuildContext context) {
@@ -1063,14 +1092,15 @@ Future<void> bookService() async {
       ),
 
       body: Padding(
-        padding:
-            const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(20),
 
         child: Column(
           crossAxisAlignment:
               CrossAxisAlignment.start,
 
           children: [
+
+            // Provider Icon
             const Center(
               child: CircleAvatar(
                 radius: 50,
@@ -1083,40 +1113,40 @@ Future<void> bookService() async {
 
             const SizedBox(height: 25),
 
+            // Provider Name
             Text(
-              provider.name,
+              widget.provider.name,
               style: const TextStyle(
                 fontSize: 26,
-                fontWeight:
-                    FontWeight.bold,
+                fontWeight: FontWeight.bold,
               ),
             ),
 
             const SizedBox(height: 12),
 
+            // Service
             Text(
-              'Service: ${provider.service}',
-              style:
-                  const TextStyle(
+              'Service: ${widget.provider.service}',
+              style: const TextStyle(
                 fontSize: 18,
               ),
             ),
 
             const SizedBox(height: 12),
 
+            // Price
             Text(
-              'Price: ₹${provider.price}',
-              style:
-                  const TextStyle(
+              'Price: ₹${widget.provider.price}',
+              style: const TextStyle(
                 fontSize: 18,
               ),
             ),
 
             const SizedBox(height: 30),
 
+            // Book Button
             SizedBox(
-              width:
-                  double.infinity,
+              width: double.infinity,
               height: 50,
 
               child: ElevatedButton(
@@ -1128,12 +1158,12 @@ Future<void> bookService() async {
                       return;
                     }
 
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(
                       SnackBar(
                         content: Text(
-                          'Booking request sent to ${provider.name}',
+                          'Booking request sent to '
+                          '${widget.provider.name}',
                         ),
                       ),
                     );
@@ -1142,12 +1172,14 @@ Future<void> bookService() async {
                       return;
                     }
 
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(
-                      const SnackBar(
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(
+                      SnackBar(
                         content: Text(
-                          'Booking failed. Please try again.',
+                          e.toString().contains(
+                                  'Already booked')
+                              ? 'You have already booked this service.'
+                              : 'Booking failed. Please try again.',
                         ),
                       ),
                     );
@@ -1156,6 +1188,9 @@ Future<void> bookService() async {
 
                 child: const Text(
                   'Book Service',
+                  style: TextStyle(
+                    fontSize: 17,
+                  ),
                 ),
               ),
             ),
