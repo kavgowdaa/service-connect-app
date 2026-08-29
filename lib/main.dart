@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'screens/splash_screen.dart';
 
 void main() {
   runApp(const MyApp());
