@@ -1,43 +1,118 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import '../models/service_provider.dart';
-import '../models/booking.dart';
-import '../services/booking_service.dart';
+import '../services/api_service.dart';
 
-class ProviderDetailsScreen extends StatelessWidget {
-  final ServiceProvider provider;
-  const ProviderDetailsScreen({super.key, required this.provider});
-
-  Future<void> bookService(BuildContext context) async {
-    if (BookingService.isAlreadyBooked(provider.name, provider.service)) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('You have already booked this service.')));
-      return;
-    }
-    final response = await http.post(Uri.parse('https://jsonplaceholder.typicode.com/posts'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'providerName': provider.name, 'service': provider.service, 'price': provider.price}));
-
-    if (response.statusCode == 201) {
-      BookingService.addBooking(Booking(provider.name, provider.service, provider.price));
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Booking sent to ${provider.name}')));
-    }
-  }
+class ProviderDetailScreen extends StatelessWidget {
+  final Map provider;
+  const ProviderDetailScreen({super.key, required this.provider});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(appBar: AppBar(title: const Text('Provider Details')),
-      body: Padding(padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Center(child: CircleAvatar(radius: 50, child: Icon(Icons.person, size: 60))),
-          const SizedBox(height: 25),
-          Text(provider.name, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold)),
-          const SizedBox(height: 12),
-          Text('Service: ${provider.service}', style: const TextStyle(fontSize: 18)),
-          const SizedBox(height: 12),
-          Text('Price: ₹${provider.price}', style: const TextStyle(fontSize: 18)),
-          const SizedBox(height: 30),
-          SizedBox(width: double.infinity, height: 50, child: ElevatedButton(onPressed: () => bookService(context), child: const Text('Book Service'))),
-        ])));
+    return Scaffold(
+      backgroundColor: Colors.white,
+      appBar: AppBar(
+        title: Text(provider["name"]),
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black,
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              padding: EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: CircleAvatar(
+                      radius: 50,
+                      backgroundColor: const Color(0xFF6C5CE7).withOpacity(0.15),
+                      child: Text(provider["name"][0],
+                        style: const TextStyle(fontSize: 40, fontWeight: FontWeight.bold, color: Color(0xFF6C5CE7))),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Center(child: Text(provider["name"], style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold))),
+                  Center(child: Text(provider["service"], style: const TextStyle(color: Colors.grey, fontSize: 16))),
+                  const SizedBox(height: 20),
+                  Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+                    _info(Icons.star, "${provider["rating"]} Rating", Colors.orange),
+                    _info(Icons.work, "120+ Jobs", Colors.blue),
+                    _info(Icons.verified, "Verified", Colors.green),
+                  ]),
+                  const SizedBox(height: 20),
+
+                  // ADDED FOR JOB: Google Maps Section
+                  Container(
+                    height: 160,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          Container(color: Colors.grey[200]),
+                          Center(child: Icon(Icons.map, size: 40, color: Colors.grey[400])),
+                          Positioned(
+                            bottom: 10, left: 10,
+                            child: Container(
+                              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(8)),
+                              child: Text("📍 ${provider["name"]} • 1.2 km away • Mangaluru", style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text("About", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 8),
+                  Text("Experienced ${provider["service"]} professional with 5+ years. Serving tenants, landlords & PG owners. Available 24/7 in Mangaluru area.",
+                    style: TextStyle(color: Colors.grey[600], height: 1.5)),
+                ],
+              ),
+            ),
+          ),
+          // Bottom price bar
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 10, offset: Offset(0, -2))],
+            ),
+            child: Row(children: [
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text("₹${provider["price"]}/hour", style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF6C5CE7))),
+                Text("Incl. taxes", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ]),
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () async {
+                  await ApiService().bookProvider(provider["id"]);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text("✅ ${provider["name"]} booked for ₹${provider["price"]}"), backgroundColor: Colors.green));
+                    Navigator.pop(context);
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C5CE7),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                child: const Text("Confirm Booking", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              ),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _info(IconData icon, String text, Color color) {
+    return Column(children: [Icon(icon, color: color, size: 22), const SizedBox(height: 6), Text(text, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500))]);
   }
 }
