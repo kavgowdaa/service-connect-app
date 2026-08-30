@@ -1,21 +1,35 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import '../models/service_provider.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ApiService {
-  final services = ['plumbing','electrical','cleaning','carpentry'];
-  final prices = [500.0,700.0,400.0,800.0];
+  static String get baseUrl {
+    if (kIsWeb) return "http://127.0.0.1:8000";
+    return "http://10.0.2.2:8000";
+  }
 
-  Future<List<ServiceProvider>> fetchProviders() async {
-    final res = await http.get(Uri.parse('https://jsonplaceholder.typicode.com/users'));
-    if (res.statusCode == 200) {
-      final data = jsonDecode(res.body);
-      return List.generate(data.length, (i) => ServiceProvider.fromJson({
-        'name': data[i]['name'],
-        'service': services[i % 4],
-        'price': prices[i % 4],
-      }));
-    }
-    return [];
+  // Main method
+  static Future<List<dynamic>> getProviders() async {
+    final res = await http.get(Uri.parse("$baseUrl/providers"));
+    return res.statusCode == 200 ? jsonDecode(res.body) : [];
+  }
+
+  // Alias for home_screen.dart which calls fetchProviders
+  static Future<List<dynamic>> fetchProviders() async {
+    return getProviders();
+  }
+
+  static Future<bool> bookService(int id) async {
+    final res = await http.post(Uri.parse("$baseUrl/book/$id"));
+    return res.statusCode == 200;
+  }
+
+  static Future<List<dynamic>> getBookings() async {
+    final res = await http.get(Uri.parse("$baseUrl/bookings"));
+    return res.statusCode == 200 ? jsonDecode(res.body) : [];
+  }
+
+  static Future<List<dynamic>> fetchBookings() async {
+    return getBookings();
   }
 }
