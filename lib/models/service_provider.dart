@@ -1,10 +1,25 @@
 class ServiceProvider {
-  String name;
-  String service;
-  double price;
-  ServiceProvider(this.name, this.service, this.price);
+  final int id;
+  final String name;
+  final String service;
+  final double price;
+  final double rating;
+
+  ServiceProvider({
+    required this.id,
+    required this.name,
+    required this.service,
+    required this.price,
+    required this.rating,
+  });
 
   factory ServiceProvider.fromJson(Map<String, dynamic> json) {
-    return ServiceProvider(json['name'], json['service'], (json['price'] as num).toDouble());
+    return ServiceProvider(
+      id: json['id'] as int,
+      name: json['name'] as String,
+      service: json['service'] as String,
+      price: (json['price'] as num).toDouble(),
+      rating: (json['rating'] as num?)?.toDouble() ?? 0.0,
+    );
   }
 }
