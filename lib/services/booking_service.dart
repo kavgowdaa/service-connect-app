@@ -1,9 +1,13 @@
 import '../models/booking.dart';
-class BookingService {
-  static List<Booking> bookings = []; // later replace with Firestore
 
-  static bool isAlreadyBooked(name, service) {
+class BookingService {
+  static List<Booking> bookings = [];
+
+  static bool isAlreadyBooked(String name, String service) {
     return bookings.any((b) => b.providerName == name && b.service == service);
   }
-  static void addBooking(Booking b) => bookings.add(b);
+
+  static void addBooking(Booking booking) {
+    bookings.add(booking);
+  }
 }

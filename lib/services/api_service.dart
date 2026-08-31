@@ -1,4 +1,6 @@
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -15,9 +17,8 @@ class ApiService {
 
   Future<List<dynamic>> getProviders({String? service}) async {
     try {
-      String cleanService = service?.trim() ?? '';
+      final String cleanService = service?.trim() ?? '';
 
-      // Build URL
       Uri url;
 
       if (cleanService.isEmpty || cleanService.toLowerCase() == 'all') {
@@ -28,37 +29,25 @@ class ApiService {
         ).replace(queryParameters: {'service': cleanService.toLowerCase()});
       }
 
-      print('==========================================');
-      print('GET PROVIDERS');
-      print('SERVICE: $cleanService');
-      print('URL: $url');
-      print('==========================================');
+      debugPrint('==========================================');
+      debugPrint('GET PROVIDERS');
+      debugPrint('SERVICE: $cleanService');
+      debugPrint('URL: $url');
+      debugPrint('==========================================');
 
       final response = await http
           .get(url, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 10));
 
-      print('STATUS CODE: ${response.statusCode}');
-      print('RESPONSE: ${response.body}');
-      print('==========================================');
-
-      // ========================================================
-      // CHECK HTTP STATUS
-      // ========================================================
+      debugPrint('STATUS CODE: ${response.statusCode}');
+      debugPrint('RESPONSE: ${response.body}');
+      debugPrint('==========================================');
 
       if (response.statusCode != 200) {
         throw Exception('Provider API failed: ${response.statusCode}');
       }
 
-      // ========================================================
-      // DECODE JSON
-      // ========================================================
-
       final decoded = jsonDecode(response.body);
-
-      // ========================================================
-      // PROVIDER LIST
-      // ========================================================
 
       if (decoded is List) {
         return decoded;
@@ -66,10 +55,10 @@ class ApiService {
 
       throw Exception('Invalid providers response from server');
     } catch (e) {
-      print('==========================================');
-      print('PROVIDER API ERROR');
-      print(e);
-      print('==========================================');
+      debugPrint('==========================================');
+      debugPrint('PROVIDER API ERROR');
+      debugPrint('$e');
+      debugPrint('==========================================');
 
       rethrow;
     }
@@ -83,14 +72,14 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl/providers/$providerId');
 
-      print('GET PROVIDER: $url');
+      debugPrint('GET PROVIDER: $url');
 
       final response = await http
           .get(url, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 10));
 
-      print('STATUS: ${response.statusCode}');
-      print('BODY: ${response.body}');
+      debugPrint('STATUS: ${response.statusCode}');
+      debugPrint('BODY: ${response.body}');
 
       if (response.statusCode != 200) {
         throw Exception('Provider API failed: ${response.statusCode}');
@@ -104,7 +93,7 @@ class ApiService {
 
       throw Exception('Invalid provider response');
     } catch (e) {
-      print('GET PROVIDER ERROR: $e');
+      debugPrint('GET PROVIDER ERROR: $e');
       rethrow;
     }
   }
@@ -121,8 +110,8 @@ class ApiService {
           .get(url, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 10));
 
-      print('GET SERVICES STATUS: ${response.statusCode}');
-      print('GET SERVICES BODY: ${response.body}');
+      debugPrint('GET SERVICES STATUS: ${response.statusCode}');
+      debugPrint('GET SERVICES BODY: ${response.body}');
 
       if (response.statusCode != 200) {
         throw Exception('Services API failed: ${response.statusCode}');
@@ -136,7 +125,7 @@ class ApiService {
 
       throw Exception('Invalid services response');
     } catch (e) {
-      print('GET SERVICES ERROR: $e');
+      debugPrint('GET SERVICES ERROR: $e');
       rethrow;
     }
   }
@@ -167,11 +156,11 @@ class ApiService {
         'notes': notes,
       };
 
-      print('==========================================');
-      print('CREATE BOOKING');
-      print('URL: $url');
-      print('BODY: $body');
-      print('==========================================');
+      debugPrint('==========================================');
+      debugPrint('CREATE BOOKING');
+      debugPrint('URL: $url');
+      debugPrint('BODY: $body');
+      debugPrint('==========================================');
 
       final response = await http
           .post(
@@ -184,8 +173,8 @@ class ApiService {
           )
           .timeout(const Duration(seconds: 10));
 
-      print('BOOKING STATUS: ${response.statusCode}');
-      print('BOOKING RESPONSE: ${response.body}');
+      debugPrint('BOOKING STATUS: ${response.statusCode}');
+      debugPrint('BOOKING RESPONSE: ${response.body}');
 
       if (response.statusCode != 200) {
         throw Exception('Booking failed: ${response.statusCode}');
@@ -199,7 +188,7 @@ class ApiService {
 
       throw Exception('Invalid booking response');
     } catch (e) {
-      print('BOOKING ERROR: $e');
+      debugPrint('BOOKING ERROR: $e');
       rethrow;
     }
   }

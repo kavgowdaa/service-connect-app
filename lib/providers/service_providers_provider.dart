@@ -9,17 +9,11 @@ final apiServiceProvider = Provider<ApiService>((ref) {
 
 final serviceProvidersProvider =
     FutureProvider.family<List<ServiceProvider>, String>((ref, service) async {
-  final apiService = ref.read(apiServiceProvider);
+      final apiService = ref.read(apiServiceProvider);
 
-  final data = await apiService.getProviders(
-    service: service,
-  );
+      final data = await apiService.getProviders(service: service);
 
-  return data
-      .map(
-        (json) => ServiceProvider.fromJson(
-          Map<String, dynamic>.from(json),
-        ),
-      )
-      .toList();
-});
+      return data.map((json) {
+        return ServiceProvider.fromJson(Map<String, dynamic>.from(json));
+      }).toList();
+    });

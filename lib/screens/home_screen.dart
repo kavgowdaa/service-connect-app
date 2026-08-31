@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../models/service_provider.dart';
+import '../providers/service_providers_provider.dart';
 import '../services/api_service.dart';
 import 'provider_details_screen.dart';
 import 'booking_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   final ApiService api = ApiService();
   final TextEditingController searchController = TextEditingController();
 
-  List providers = [];
+  List<ServiceProvider> providers = [];
+
   bool loading = false;
 
   String selectedService = 'All';
@@ -50,8 +54,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
       if (!mounted) return;
 
+      final List<ServiceProvider> convertedProviders = data
+          .map(
+            (json) => ServiceProvider.fromJson(Map<String, dynamic>.from(json)),
+          )
+          .toList();
+
       setState(() {
-        providers = data;
+        providers = convertedProviders;
         loading = false;
       });
     } catch (e) {
@@ -64,6 +74,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Unable to load providers')));
+
+      debugPrint('HOME PROVIDERS ERROR: $e');
     }
   }
 
@@ -77,6 +89,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
 
     loadProviders(query: service == 'All' ? '' : service);
+
+    ref.invalidate(serviceProvidersProvider(service == 'All' ? '' : service));
   }
 
   @override
@@ -95,6 +109,8 @@ class _HomeScreenState extends State<HomeScreen> {
       backgroundColor: const Color(0xFF071A33),
       body: SafeArea(
         child: RefreshIndicator(
+          color: const Color(0xFF216BFF),
+          backgroundColor: const Color(0xFF102846),
           onRefresh: () {
             return loadProviders(
               query: selectedService == 'All' ? '' : selectedService,
@@ -103,42 +119,132 @@ class _HomeScreenState extends State<HomeScreen> {
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              // ==================================================
               // HEADER
+              // ==================================================
               SliverToBoxAdapter(child: _buildHeader()),
 
+              // ==================================================
               // SEARCH
+              // ==================================================
               SliverToBoxAdapter(child: _buildSearch()),
 
+              // ==================================================
               // SERVICES
+              // ==================================================
               SliverToBoxAdapter(child: _buildServices()),
 
+              // ==================================================
               // SECTION TITLE
+              // ==================================================
               SliverToBoxAdapter(child: _buildSectionTitle()),
 
+              // ==================================================
               // PROVIDERS
-              if (loading)
-                const SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: Center(
-                    child: CircularProgressIndicator(color: Color(0xFF3478F6)),
-                  ),
-                )
-              else if (providers.isEmpty)
-                SliverFillRemaining(
-                  hasScrollBody: false,
-                  child: _buildEmptyState(),
-                )
-              else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final provider = providers[index];
+              // ==================================================
+              Consumer(
+                builder: (context, ref, child) {
+                  final providerAsync = ref.watch(
+                    serviceProvidersProvider(
+                      selectedService == 'All' ? '' : selectedService,
+                    ),
+                  );
 
-                      return _buildProviderCard(provider);
-                    }, childCount: providers.length),
-                  ),
-                ),
+                  return providerAsync.when(
+                    // ------------------------------------------------
+                    // LOADING
+                    // ------------------------------------------------
+                    loading: () {
+                      return const SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            color: Color(0xFF3478F6),
+                          ),
+                        ),
+                      );
+                    },
+
+                    // ------------------------------------------------
+                    // ERROR
+                    // ------------------------------------------------
+                    error: (error, stackTrace) {
+                      debugPrint('RIVERPOD PROVIDER ERROR: $error');
+
+                      return SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(30),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Icon(
+                                  Icons.cloud_off_rounded,
+                                  color: Color(0xFF7189AA),
+                                  size: 50,
+                                ),
+                                const SizedBox(height: 15),
+                                const Text(
+                                  'Unable to load providers',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton(
+                                  onPressed: () {
+                                    ref.invalidate(
+                                      serviceProvidersProvider(
+                                        selectedService == 'All'
+                                            ? ''
+                                            : selectedService,
+                                      ),
+                                    );
+                                  },
+                                  child: const Text(
+                                    'Try Again',
+                                    style: TextStyle(color: Color(0xFF4B8BFF)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+
+                    // ------------------------------------------------
+                    // DATA
+                    // ------------------------------------------------
+                    data: (providerList) {
+                      if (providerList.isEmpty) {
+                        return SliverFillRemaining(
+                          hasScrollBody: false,
+                          child: _buildEmptyState(),
+                        );
+                      }
+
+                      return SliverPadding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
+                        sliver: SliverList(
+                          delegate: SliverChildBuilderDelegate((
+                            context,
+                            index,
+                          ) {
+                            final ServiceProvider provider =
+                                providerList[index];
+
+                            return _buildProviderCard(provider);
+                          }, childCount: providerList.length),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -335,9 +441,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       color: selected ? Colors.white : const Color(0xFF7E96B7),
                       size: 25,
                     ),
-
                     const SizedBox(height: 8),
-
                     Text(
                       name,
                       style: TextStyle(
@@ -377,7 +481,6 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-
           Text(
             '${providers.length} available',
             style: const TextStyle(color: Color(0xFF6E86A7), fontSize: 12),
@@ -391,16 +494,11 @@ class _HomeScreenState extends State<HomeScreen> {
   // PROVIDER CARD
   // ============================================================
 
-  Widget _buildProviderCard(dynamic provider) {
-    final String name = provider['name']?.toString() ?? 'Provider';
-
-    final String service = provider['service']?.toString() ?? 'Service';
-
-    final String description = provider['description']?.toString() ?? '';
-
-    final double rating = (provider['rating'] as num?)?.toDouble() ?? 0.0;
-
-    final double price = (provider['price'] as num?)?.toDouble() ?? 0.0;
+  Widget _buildProviderCard(ServiceProvider provider) {
+    final String name = provider.name;
+    final String service = provider.service;
+    final double rating = provider.rating;
+    final double price = provider.price;
 
     final String firstLetter = name.isNotEmpty ? name[0].toUpperCase() : 'P';
 
@@ -409,7 +507,7 @@ class _HomeScreenState extends State<HomeScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ProviderDetailScreen(provider: provider),
+            builder: (_) => ProviderDetailScreen(provider: provider.toJson()),
           ),
         );
       },
@@ -478,9 +576,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                           ),
-
                           const SizedBox(width: 5),
-
                           const Icon(
                             Icons.verified_rounded,
                             color: Color(0xFF35D07F),
@@ -503,17 +599,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
                       const SizedBox(height: 8),
 
-                      Row(
+                      const Row(
                         children: [
-                          const Icon(
+                          Icon(
                             Icons.location_on_outlined,
                             color: Color(0xFF7189AA),
                             size: 14,
                           ),
-
-                          const SizedBox(width: 3),
-
-                          const Text(
+                          SizedBox(width: 3),
+                          Text(
                             'Mangaluru',
                             style: TextStyle(
                               color: Color(0xFF7189AA),
@@ -543,9 +637,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         color: Color(0xFFFFC857),
                         size: 15,
                       ),
-
                       const SizedBox(width: 3),
-
                       Text(
                         rating.toStringAsFixed(1),
                         style: const TextStyle(
@@ -565,11 +657,11 @@ class _HomeScreenState extends State<HomeScreen> {
             // ==================================================
             // DESCRIPTION
             // ==================================================
-            if (description.isNotEmpty)
+            if (provider.description.isNotEmpty)
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  description,
+                  provider.description,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -580,7 +672,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
 
-            const SizedBox(height: 15),
+            if (provider.description.isNotEmpty) const SizedBox(height: 15),
 
             // ==================================================
             // PRICE + BOOK BUTTON
@@ -599,7 +691,6 @@ class _HomeScreenState extends State<HomeScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-
                     const Text(
                       'per hour',
                       style: TextStyle(color: Color(0xFF7189AA), fontSize: 10),
@@ -609,9 +700,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 const Spacer(),
 
-                // ==================================================
-                // BOOK NOW BUTTON
-                // ==================================================
+                // BOOK NOW
                 SizedBox(
                   height: 42,
                   child: ElevatedButton(
@@ -619,7 +708,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => BookingScreen(provider: provider),
+                          builder: (_) =>
+                              BookingScreen(provider: provider.toJson()),
                         ),
                       );
                     },

@@ -72,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen> {
 
       if (!mounted) return;
 
-      // If credentials were saved
       if (savedRemember == 'true' &&
           savedEmail != null &&
           savedPassword != null &&
@@ -85,7 +84,6 @@ class _LoginScreenState extends State<LoginScreen> {
           checkingSavedLogin = false;
         });
 
-        // Automatically login
         await automaticLogin();
       } else {
         setState(() {
@@ -121,7 +119,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> removeSavedCredentials() async {
     await secureStorage.delete(key: emailKey);
+
     await secureStorage.delete(key: passwordKey);
+
     await secureStorage.delete(key: rememberKey);
   }
 
@@ -138,7 +138,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // Temporary login simulation.
     //
-    // Later this can be replaced with your FastAPI
+    // Later replace this with your FastAPI
     // authentication request.
 
     await Future.delayed(const Duration(seconds: 1));
@@ -158,6 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> login() async {
     final email = emailController.text.trim();
+
     final password = passwordController.text.trim();
 
     // ----------------------------------------------------------
@@ -165,6 +166,8 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
 
     if (email.isEmpty || password.isEmpty) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter email and password')),
       );
@@ -173,6 +176,8 @@ class _LoginScreenState extends State<LoginScreen> {
     }
 
     if (!email.contains('@')) {
+      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please enter a valid email address')),
       );
@@ -183,6 +188,8 @@ class _LoginScreenState extends State<LoginScreen> {
     // ----------------------------------------------------------
     // START LOADING
     // ----------------------------------------------------------
+
+    if (!mounted) return;
 
     setState(() {
       loading = true;
@@ -228,10 +235,11 @@ class _LoginScreenState extends State<LoginScreen> {
   // ============================================================
 
   void goToHome() {
-    Navigator.pushReplacement(
+    if (!mounted) return;
+
+    Navigator.of(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
-    );
+    ).pushReplacement(MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
   // ============================================================
@@ -243,13 +251,13 @@ class _LoginScreenState extends State<LoginScreen> {
       text: emailController.text.trim(),
     );
 
-    showDialog(
+    showDialog<void>(
       context: context,
       builder: (dialogContext) {
         bool sending = false;
 
         return StatefulBuilder(
-          builder: (context, setDialogState) {
+          builder: (dialogBuildContext, setDialogState) {
             return AlertDialog(
               backgroundColor: const Color(0xFF102846),
 
@@ -329,11 +337,14 @@ class _LoginScreenState extends State<LoginScreen> {
               actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
 
               actions: [
+                // ------------------------------------------------
+                // CANCEL
+                // ------------------------------------------------
                 TextButton(
                   onPressed: sending
                       ? null
                       : () {
-                          Navigator.pop(dialogContext);
+                          Navigator.of(dialogContext).pop();
                         },
 
                   child: const Text(
@@ -342,14 +353,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
+                // ------------------------------------------------
+                // SEND LINK
+                // ------------------------------------------------
                 ElevatedButton(
                   onPressed: sending
                       ? null
                       : () async {
                           final email = forgotEmailController.text.trim();
 
+                          // Validate before async gap.
                           if (email.isEmpty || !email.contains('@')) {
-                            ScaffoldMessenger.of(this.context).showSnackBar(
+                            ScaffoldMessenger.of(
+                              dialogBuildContext,
+                            ).showSnackBar(
                               const SnackBar(
                                 content: Text(
                                   'Please enter a valid email address',
@@ -365,17 +382,30 @@ class _LoginScreenState extends State<LoginScreen> {
                           });
 
                           // Temporary simulation.
-                          //
-                          // Later this will connect to
-                          // your FastAPI password-reset API.
-
                           await Future.delayed(const Duration(seconds: 1));
 
-                          if (!mounted) return;
+                          // ------------------------------------------------
+                          // IMPORTANT:
+                          // Check the dialog context after await.
+                          // ------------------------------------------------
 
-                          Navigator.pop(dialogContext);
+                          if (!dialogContext.mounted) {
+                            return;
+                          }
 
-                          ScaffoldMessenger.of(this.context).showSnackBar(
+                          // Close dialog.
+                          Navigator.of(dialogContext).pop();
+
+                          // ------------------------------------------------
+                          // Parent State may have been disposed while
+                          // the async operation was running.
+                          // ------------------------------------------------
+
+                          if (!mounted) {
+                            return;
+                          }
+
+                          ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
                                 'Password reset link sent to $email',
@@ -389,7 +419,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     backgroundColor: const Color(0xFF216BFF),
                     foregroundColor: Colors.white,
                     elevation: 0,
-
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(11),
                     ),
@@ -425,10 +454,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Show loading screen while checking secure storage.
     if (checkingSavedLogin) {
       return const Scaffold(
         backgroundColor: Color(0xFF071A33),
+
         body: Center(
           child: CircularProgressIndicator(color: Color(0xFF216BFF)),
         ),
@@ -448,6 +477,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+
                 children: [
                   // ==================================================
                   // LOGO
@@ -782,6 +812,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         Center(
                           child: TextButton(
                             onPressed: () {
+                              if (!mounted) {
+                                return;
+                              }
+
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text(
@@ -882,19 +916,16 @@ class _LoginScreenState extends State<LoginScreen> {
 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-
           borderSide: const BorderSide(color: Color(0xFF294566)),
         ),
 
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-
           borderSide: const BorderSide(color: Color(0xFF294566)),
         ),
 
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
-
           borderSide: const BorderSide(color: Color(0xFF3478F6), width: 1.3),
         ),
       ),
