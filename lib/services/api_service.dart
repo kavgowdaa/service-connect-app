@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 class ApiService {
@@ -8,7 +8,7 @@ class ApiService {
   // BACKEND URL
   // ============================================================
 
-  // Chrome / Windows:
+  // Chrome / Windows
   static const String baseUrl = 'http://127.0.0.1:8000';
 
   // ============================================================
@@ -41,7 +41,6 @@ class ApiService {
 
       debugPrint('STATUS CODE: ${response.statusCode}');
       debugPrint('RESPONSE: ${response.body}');
-      debugPrint('==========================================');
 
       if (response.statusCode != 200) {
         throw Exception('Provider API failed: ${response.statusCode}');
@@ -55,11 +54,7 @@ class ApiService {
 
       throw Exception('Invalid providers response from server');
     } catch (e) {
-      debugPrint('==========================================');
-      debugPrint('PROVIDER API ERROR');
-      debugPrint('$e');
-      debugPrint('==========================================');
-
+      debugPrint('PROVIDER API ERROR: $e');
       rethrow;
     }
   }
@@ -72,7 +67,10 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl/providers/$providerId');
 
-      debugPrint('GET PROVIDER: $url');
+      debugPrint('==========================================');
+      debugPrint('GET PROVIDER');
+      debugPrint('URL: $url');
+      debugPrint('==========================================');
 
       final response = await http
           .get(url, headers: {'Accept': 'application/json'})
@@ -106,11 +104,17 @@ class ApiService {
     try {
       final url = Uri.parse('$baseUrl/services');
 
+      debugPrint('==========================================');
+      debugPrint('GET SERVICES');
+      debugPrint('URL: $url');
+      debugPrint('==========================================');
+
       final response = await http
           .get(url, headers: {'Accept': 'application/json'})
           .timeout(const Duration(seconds: 10));
 
       debugPrint('GET SERVICES STATUS: ${response.statusCode}');
+
       debugPrint('GET SERVICES BODY: ${response.body}');
 
       if (response.statusCode != 200) {
@@ -126,6 +130,217 @@ class ApiService {
       throw Exception('Invalid services response');
     } catch (e) {
       debugPrint('GET SERVICES ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
+  Future<Map<String, dynamic>> login({
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/login');
+
+      final body = {'email': email.trim().toLowerCase(), 'password': password};
+
+      debugPrint('==========================================');
+      debugPrint('LOGIN');
+      debugPrint('URL: $url');
+      debugPrint('EMAIL: ${body['email']}');
+      debugPrint('==========================================');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('LOGIN STATUS: ${response.statusCode}');
+
+      debugPrint('LOGIN RESPONSE: ${response.body}');
+
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Invalid response from login server');
+      }
+
+      // ==========================================================
+      // SUCCESS
+      // ==========================================================
+
+      if (response.statusCode == 200) {
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+
+        throw Exception('Invalid login response');
+      }
+
+      // ==========================================================
+      // FASTAPI ERROR
+      // ==========================================================
+
+      if (decoded is Map && decoded['detail'] != null) {
+        throw Exception(decoded['detail'].toString());
+      }
+
+      throw Exception('Login failed: ${response.statusCode}');
+    } catch (e) {
+      debugPrint('LOGIN API ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // REGISTER
+  // ============================================================
+
+  Future<Map<String, dynamic>> register({
+    required String name,
+    required String email,
+    required String password,
+  }) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/register');
+
+      final body = {
+        'name': name.trim(),
+        'email': email.trim().toLowerCase(),
+        'password': password,
+      };
+
+      debugPrint('==========================================');
+      debugPrint('REGISTER');
+      debugPrint('URL: $url');
+      debugPrint('NAME: ${body['name']}');
+      debugPrint('EMAIL: ${body['email']}');
+      debugPrint('==========================================');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('REGISTER STATUS: ${response.statusCode}');
+
+      debugPrint('REGISTER RESPONSE: ${response.body}');
+
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Invalid response from registration server');
+      }
+
+      // ==========================================================
+      // SUCCESS
+      // ==========================================================
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+
+        throw Exception('Invalid registration response');
+      }
+
+      // ==========================================================
+      // FASTAPI ERROR
+      // ==========================================================
+
+      if (decoded is Map && decoded['detail'] != null) {
+        throw Exception(decoded['detail'].toString());
+      }
+
+      throw Exception('Registration failed: ${response.statusCode}');
+    } catch (e) {
+      debugPrint('REGISTER API ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // FORGOT PASSWORD
+  // ============================================================
+
+  Future<Map<String, dynamic>> forgotPassword({required String email}) async {
+    try {
+      final url = Uri.parse('$baseUrl/auth/forgot-password');
+
+      final body = {'email': email.trim().toLowerCase()};
+
+      debugPrint('==========================================');
+      debugPrint('FORGOT PASSWORD');
+      debugPrint('URL: $url');
+      debugPrint('EMAIL: ${body['email']}');
+      debugPrint('==========================================');
+
+      final response = await http
+          .post(
+            url,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('FORGOT PASSWORD STATUS: ${response.statusCode}');
+
+      debugPrint('FORGOT PASSWORD RESPONSE: ${response.body}');
+
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Invalid response from forgot password server');
+      }
+
+      // ==========================================================
+      // SUCCESS
+      // ==========================================================
+
+      if (response.statusCode == 200) {
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
+        }
+
+        throw Exception('Invalid forgot password response');
+      }
+
+      // ==========================================================
+      // FASTAPI ERROR
+      // ==========================================================
+
+      if (decoded is Map && decoded['detail'] != null) {
+        throw Exception(decoded['detail'].toString());
+      }
+
+      throw Exception('Forgot password failed: ${response.statusCode}');
+    } catch (e) {
+      debugPrint('FORGOT PASSWORD API ERROR: $e');
+
       rethrow;
     }
   }
@@ -148,12 +363,12 @@ class ApiService {
 
       final body = {
         'provider_id': providerId,
-        'customer_name': customerName,
-        'customer_email': customerEmail,
+        'customer_name': customerName.trim(),
+        'customer_email': customerEmail.trim().toLowerCase(),
         'service_date': serviceDate,
         'service_time': serviceTime,
-        'address': address,
-        'notes': notes,
+        'address': address.trim(),
+        'notes': notes.trim(),
       };
 
       debugPrint('==========================================');
@@ -174,13 +389,24 @@ class ApiService {
           .timeout(const Duration(seconds: 10));
 
       debugPrint('BOOKING STATUS: ${response.statusCode}');
+
       debugPrint('BOOKING RESPONSE: ${response.body}');
 
-      if (response.statusCode != 200) {
-        throw Exception('Booking failed: ${response.statusCode}');
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Invalid response from booking server');
       }
 
-      final decoded = jsonDecode(response.body);
+      if (response.statusCode != 200 && response.statusCode != 201) {
+        if (decoded is Map && decoded['detail'] != null) {
+          throw Exception(decoded['detail'].toString());
+        }
+
+        throw Exception('Booking failed: ${response.statusCode}');
+      }
 
       if (decoded is Map<String, dynamic>) {
         return decoded;
@@ -189,6 +415,108 @@ class ApiService {
       throw Exception('Invalid booking response');
     } catch (e) {
       debugPrint('BOOKING ERROR: $e');
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // GET USER BOOKINGS
+  // ============================================================
+
+  Future<List<dynamic>> getBookings(String customerEmail) async {
+    try {
+      final url = Uri.parse(
+        '$baseUrl/bookings/${Uri.encodeComponent(customerEmail)}',
+      );
+
+      debugPrint('==========================================');
+      debugPrint('GET BOOKINGS');
+      debugPrint('EMAIL: $customerEmail');
+      debugPrint('URL: $url');
+      debugPrint('==========================================');
+
+      final response = await http
+          .get(url, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('BOOKINGS STATUS: ${response.statusCode}');
+
+      debugPrint('BOOKINGS RESPONSE: ${response.body}');
+
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Invalid response from bookings server');
+      }
+
+      if (response.statusCode != 200) {
+        if (decoded is Map && decoded['detail'] != null) {
+          throw Exception(decoded['detail'].toString());
+        }
+
+        throw Exception('Bookings API failed: ${response.statusCode}');
+      }
+
+      if (decoded is Map && decoded['bookings'] is List) {
+        return List<dynamic>.from(decoded['bookings']);
+      }
+
+      throw Exception('Invalid bookings response');
+    } catch (e) {
+      debugPrint('GET BOOKINGS ERROR: $e');
+
+      rethrow;
+    }
+  }
+
+  // ============================================================
+  // DELETE BOOKING
+  // ============================================================
+
+  Future<bool> deleteBooking(int bookingId) async {
+    try {
+      final url = Uri.parse('$baseUrl/booking/$bookingId');
+
+      debugPrint('==========================================');
+      debugPrint('DELETE BOOKING');
+      debugPrint('BOOKING ID: $bookingId');
+      debugPrint('URL: $url');
+      debugPrint('==========================================');
+
+      final response = await http
+          .delete(url, headers: {'Accept': 'application/json'})
+          .timeout(const Duration(seconds: 10));
+
+      debugPrint('DELETE STATUS: ${response.statusCode}');
+
+      debugPrint('DELETE RESPONSE: ${response.body}');
+
+      dynamic decoded;
+
+      try {
+        decoded = jsonDecode(response.body);
+      } catch (_) {
+        throw Exception('Invalid response from delete booking server');
+      }
+
+      if (response.statusCode != 200) {
+        if (decoded is Map && decoded['detail'] != null) {
+          throw Exception(decoded['detail'].toString());
+        }
+
+        throw Exception('Delete booking failed: ${response.statusCode}');
+      }
+
+      if (decoded is Map && decoded['success'] == true) {
+        return true;
+      }
+
+      return false;
+    } catch (e) {
+      debugPrint('DELETE BOOKING ERROR: $e');
+
       rethrow;
     }
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 import 'home_screen.dart';
+import 'register_screen.dart';
+import '../services/api_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -19,10 +21,16 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController passwordController = TextEditingController();
 
   // ============================================================
-  // SECURE STORAGE
+  // SERVICES
   // ============================================================
 
   final FlutterSecureStorage secureStorage = const FlutterSecureStorage();
+
+  final ApiService api = ApiService();
+
+  // ============================================================
+  // STORAGE KEYS
+  // ============================================================
 
   static const String emailKey = 'saved_email';
   static const String passwordKey = 'saved_password';
@@ -59,175 +67,13 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ============================================================
-  // LOAD SAVED LOGIN
+  // GO TO REGISTER
   // ============================================================
 
-  Future<void> loadSavedCredentials() async {
-    try {
-      final savedRemember = await secureStorage.read(key: rememberKey);
-
-      final savedEmail = await secureStorage.read(key: emailKey);
-
-      final savedPassword = await secureStorage.read(key: passwordKey);
-
-      if (!mounted) return;
-
-      if (savedRemember == 'true' &&
-          savedEmail != null &&
-          savedPassword != null &&
-          savedEmail.isNotEmpty &&
-          savedPassword.isNotEmpty) {
-        setState(() {
-          emailController.text = savedEmail;
-          passwordController.text = savedPassword;
-          rememberMe = true;
-          checkingSavedLogin = false;
-        });
-
-        await automaticLogin();
-      } else {
-        setState(() {
-          checkingSavedLogin = false;
-        });
-      }
-    } catch (e) {
-      debugPrint('Error loading saved credentials: $e');
-
-      if (!mounted) return;
-
-      setState(() {
-        checkingSavedLogin = false;
-      });
-    }
-  }
-
-  // ============================================================
-  // SAVE CREDENTIALS
-  // ============================================================
-
-  Future<void> saveCredentials(String email, String password) async {
-    await secureStorage.write(key: emailKey, value: email);
-
-    await secureStorage.write(key: passwordKey, value: password);
-
-    await secureStorage.write(key: rememberKey, value: 'true');
-  }
-
-  // ============================================================
-  // REMOVE CREDENTIALS
-  // ============================================================
-
-  Future<void> removeSavedCredentials() async {
-    await secureStorage.delete(key: emailKey);
-
-    await secureStorage.delete(key: passwordKey);
-
-    await secureStorage.delete(key: rememberKey);
-  }
-
-  // ============================================================
-  // AUTOMATIC LOGIN
-  // ============================================================
-
-  Future<void> automaticLogin() async {
-    if (!mounted) return;
-
-    setState(() {
-      loading = true;
-    });
-
-    // Temporary login simulation.
-    //
-    // Later replace this with your FastAPI
-    // authentication request.
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    setState(() {
-      loading = false;
-    });
-
-    goToHome();
-  }
-
-  // ============================================================
-  // LOGIN
-  // ============================================================
-
-  Future<void> login() async {
-    final email = emailController.text.trim();
-
-    final password = passwordController.text.trim();
-
-    // ----------------------------------------------------------
-    // VALIDATION
-    // ----------------------------------------------------------
-
-    if (email.isEmpty || password.isEmpty) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter email and password')),
-      );
-
-      return;
-    }
-
-    if (!email.contains('@')) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a valid email address')),
-      );
-
-      return;
-    }
-
-    // ----------------------------------------------------------
-    // START LOADING
-    // ----------------------------------------------------------
-
-    if (!mounted) return;
-
-    setState(() {
-      loading = true;
-    });
-
-    // ----------------------------------------------------------
-    // TEMPORARY LOGIN SIMULATION
-    // ----------------------------------------------------------
-
-    await Future.delayed(const Duration(seconds: 1));
-
-    if (!mounted) return;
-
-    // ----------------------------------------------------------
-    // SAVE / REMOVE CREDENTIALS
-    // ----------------------------------------------------------
-
-    try {
-      if (rememberMe) {
-        await saveCredentials(email, password);
-      } else {
-        await removeSavedCredentials();
-      }
-    } catch (e) {
-      debugPrint('Error saving credentials: $e');
-    }
-
-    if (!mounted) return;
-
-    setState(() {
-      loading = false;
-    });
-
-    // ----------------------------------------------------------
-    // GO TO HOME
-    // ----------------------------------------------------------
-
-    goToHome();
+  void goToRegister() {
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RegisterScreen()));
   }
 
   // ============================================================
@@ -243,11 +89,278 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ============================================================
+  // LOAD SAVED CREDENTIALS
+  // ============================================================
+
+  // ============================================================
+  // LOAD SAVED CREDENTIALS
+  // ============================================================
+
+  Future<void> loadSavedCredentials() async {
+    try {
+      final savedRemember = await secureStorage.read(key: rememberKey);
+
+      final savedEmail = await secureStorage.read(key: emailKey);
+
+      final savedPassword = await secureStorage.read(key: passwordKey);
+
+      if (!mounted) return;
+
+      if (savedRemember == 'true' &&
+          savedEmail != null &&
+          savedPassword != null &&
+          savedEmail.trim().isNotEmpty &&
+          savedPassword.trim().isNotEmpty) {
+        emailController.text = savedEmail;
+        passwordController.text = savedPassword;
+
+        setState(() {
+          rememberMe = true;
+          checkingSavedLogin = false;
+        });
+
+        await automaticLogin();
+      } else {
+        setState(() {
+          checkingSavedLogin = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('ERROR LOADING SAVED LOGIN: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        checkingSavedLogin = false;
+      });
+    }
+  }
+  // ============================================================
+  // SAVE CREDENTIALS
+  // ============================================================
+
+  Future<void> saveCredentials(String email, String password) async {
+    await secureStorage.write(key: emailKey, value: email);
+
+    await secureStorage.write(key: passwordKey, value: password);
+
+    await secureStorage.write(key: rememberKey, value: 'true');
+  }
+
+  // ============================================================
+  // REMOVE SAVED CREDENTIALS
+  // ============================================================
+
+  Future<void> removeSavedCredentials() async {
+    await secureStorage.delete(key: emailKey);
+
+    await secureStorage.delete(key: passwordKey);
+
+    await secureStorage.delete(key: rememberKey);
+  }
+
+  // ============================================================
+  // SAVE LOGGED-IN USER
+  // ============================================================
+
+  Future<void> saveLoggedInUser(
+    String email,
+    Map<String, dynamic> result,
+  ) async {
+    await secureStorage.write(key: 'logged_in', value: 'true');
+
+    await secureStorage.write(key: 'user_email', value: email);
+    await secureStorage.write(key: 'saved_email', value: email);
+
+    final user = result['user'];
+
+    if (user is Map) {
+      final name = user['name']?.toString() ?? '';
+
+      await secureStorage.write(key: 'user_name', value: name);
+
+      if (user['id'] != null) {
+        await secureStorage.write(key: 'user_id', value: user['id'].toString());
+      }
+    }
+  }
+
+  // ============================================================
+  // AUTOMATIC LOGIN
+  // ============================================================
+
+  Future<void> automaticLogin() async {
+    if (!mounted) return;
+
+    setState(() {
+      loading = true;
+    });
+
+    try {
+      final email = emailController.text.trim().toLowerCase();
+
+      final password = passwordController.text.trim();
+
+      if (email.isEmpty || password.isEmpty) {
+        await removeSavedCredentials();
+
+        if (!mounted) return;
+
+        setState(() {
+          loading = false;
+          rememberMe = false;
+        });
+
+        return;
+      }
+
+      debugPrint('================================');
+      debugPrint('AUTOMATIC LOGIN');
+      debugPrint('EMAIL: $email');
+      debugPrint('================================');
+
+      final result = await api.login(email: email, password: password);
+      const FlutterSecureStorage secureStorage = FlutterSecureStorage();
+
+      final user = result['user'];
+
+      final loggedInEmail =
+          user?['email']?.toString() ?? email.trim().toLowerCase();
+
+      await secureStorage.write(key: 'saved_email', value: loggedInEmail);
+
+      debugPrint('AUTOMATIC LOGIN SUCCESS: $result');
+
+      await saveLoggedInUser(email, result);
+
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+
+      goToHome();
+    } catch (e) {
+      debugPrint('AUTOMATIC LOGIN FAILED: $e');
+
+      await removeSavedCredentials();
+
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+        rememberMe = false;
+      });
+    }
+  }
+
+  // ============================================================
+  // LOGIN
+  // ============================================================
+
+  Future<void> login() async {
+    final email = emailController.text.trim().toLowerCase();
+
+    final password = passwordController.text.trim();
+
+    // ==========================================================
+    // VALIDATION
+    // ==========================================================
+
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+
+      return;
+    }
+
+    if (!email.contains('@') || !email.contains('.')) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a valid email address')),
+      );
+
+      return;
+    }
+
+    if (password.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters')),
+      );
+
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      loading = true;
+    });
+
+    // ==========================================================
+    // CALL FASTAPI
+    // ==========================================================
+
+    try {
+      debugPrint('================================');
+      debugPrint('LOGIN');
+      debugPrint('EMAIL: $email');
+      debugPrint('================================');
+
+      final result = await api.login(email: email, password: password);
+
+      debugPrint('LOGIN SUCCESS: $result');
+
+      // ========================================================
+      // SAVE USER
+      // ========================================================
+
+      await saveLoggedInUser(email, result);
+
+      // ========================================================
+      // REMEMBER ME
+      // ========================================================
+
+      if (rememberMe) {
+        await saveCredentials(email, password);
+      } else {
+        await removeSavedCredentials();
+      }
+
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+
+      // ========================================================
+      // HOME
+      // ========================================================
+
+      goToHome();
+    } catch (e) {
+      debugPrint('LOGIN ERROR: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        loading = false;
+      });
+
+      final message = e.toString().replaceFirst('Exception: ', '');
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+      );
+    }
+  }
+
+  // ============================================================
   // FORGOT PASSWORD
   // ============================================================
 
   void showForgotPassword() {
-    final TextEditingController forgotEmailController = TextEditingController(
+    final forgotEmailController = TextEditingController(
       text: emailController.text.trim(),
     );
 
@@ -337,9 +450,9 @@ class _LoginScreenState extends State<LoginScreen> {
               actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
 
               actions: [
-                // ------------------------------------------------
+                // ==================================================
                 // CANCEL
-                // ------------------------------------------------
+                // ==================================================
                 TextButton(
                   onPressed: sending
                       ? null
@@ -353,17 +466,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
 
-                // ------------------------------------------------
+                // ==================================================
                 // SEND LINK
-                // ------------------------------------------------
+                // ==================================================
                 ElevatedButton(
                   onPressed: sending
                       ? null
                       : () async {
-                          final email = forgotEmailController.text.trim();
+                          final email = forgotEmailController.text
+                              .trim()
+                              .toLowerCase();
 
-                          // Validate before async gap.
-                          if (email.isEmpty || !email.contains('@')) {
+                          if (email.isEmpty ||
+                              !email.contains('@') ||
+                              !email.contains('.')) {
                             ScaffoldMessenger.of(
                               dialogBuildContext,
                             ).showSnackBar(
@@ -381,44 +497,57 @@ class _LoginScreenState extends State<LoginScreen> {
                             sending = true;
                           });
 
-                          // Temporary simulation.
-                          await Future.delayed(const Duration(seconds: 1));
+                          try {
+                            await api.forgotPassword(email: email);
 
-                          // ------------------------------------------------
-                          // IMPORTANT:
-                          // Check the dialog context after await.
-                          // ------------------------------------------------
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
 
-                          if (!dialogContext.mounted) {
-                            return;
-                          }
+                            Navigator.of(dialogContext).pop();
 
-                          // Close dialog.
-                          Navigator.of(dialogContext).pop();
+                            if (!mounted) return;
 
-                          // ------------------------------------------------
-                          // Parent State may have been disposed while
-                          // the async operation was running.
-                          // ------------------------------------------------
-
-                          if (!mounted) {
-                            return;
-                          }
-
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text(
-                                'Password reset link sent to $email',
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Password reset link sent to $email',
+                                ),
+                                backgroundColor: const Color(0xFF1D9B61),
                               ),
-                              backgroundColor: const Color(0xFF1D9B61),
-                            ),
-                          );
+                            );
+                          } catch (e) {
+                            if (!dialogContext.mounted) {
+                              return;
+                            }
+
+                            setDialogState(() {
+                              sending = false;
+                            });
+
+                            final message = e.toString().replaceFirst(
+                              'Exception: ',
+                              '',
+                            );
+
+                            ScaffoldMessenger.of(
+                              dialogBuildContext,
+                            ).showSnackBar(
+                              SnackBar(
+                                content: Text(message),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                          }
                         },
 
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF216BFF),
+
                     foregroundColor: Colors.white,
+
                     elevation: 0,
+
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(11),
                     ),
@@ -454,6 +583,10 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // ==========================================================
+    // CHECKING SAVED LOGIN
+    // ==========================================================
+
     if (checkingSavedLogin) {
       return const Scaffold(
         backgroundColor: Color(0xFF071A33),
@@ -463,6 +596,10 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+
+    // ==========================================================
+    // LOGIN SCREEN
+    // ==========================================================
 
     return Scaffold(
       backgroundColor: const Color(0xFF071A33),
@@ -518,6 +655,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   // ==================================================
                   const Text(
                     'SERVICECONNECT',
+
                     textAlign: TextAlign.center,
 
                     style: TextStyle(
@@ -532,6 +670,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                   const Text(
                     'Trusted services, near you',
+
                     textAlign: TextAlign.center,
 
                     style: TextStyle(color: Color(0xFF8296B5), fontSize: 12),
@@ -637,7 +776,6 @@ class _LoginScreenState extends State<LoginScreen> {
                           hint: 'Enter your password',
                           icon: Icons.lock_outline_rounded,
                           obscureText: obscurePassword,
-
                           suffixIcon: IconButton(
                             onPressed: () {
                               setState(() {
@@ -649,9 +787,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               obscurePassword
                                   ? Icons.visibility_off_outlined
                                   : Icons.visibility_outlined,
-
                               color: const Color(0xFF7189AA),
-
                               size: 20,
                             ),
                           ),
@@ -660,7 +796,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         const SizedBox(height: 6),
 
                         // ==================================================
-                        // REMEMBER ME + FORGOT PASSWORD
+                        // REMEMBER ME + FORGOT
                         // ==================================================
                         Row(
                           children: [
@@ -707,7 +843,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
                               style: TextButton.styleFrom(
                                 padding: EdgeInsets.zero,
-                                minimumSize: const Size(0, 35),
+                                minimumSize: const Size(35, 35),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
 
@@ -731,6 +867,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // ==================================================
                         SizedBox(
                           width: double.infinity,
+
                           height: 49,
 
                           child: ElevatedButton(
@@ -756,7 +893,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
-
                                     child: CircularProgressIndicator(
                                       strokeWidth: 2.3,
                                       color: Colors.white,
@@ -811,19 +947,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // ==================================================
                         Center(
                           child: TextButton(
-                            onPressed: () {
-                              if (!mounted) {
-                                return;
-                              }
-
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Registration screen coming next',
-                                  ),
-                                ),
-                              );
-                            },
+                            onPressed: goToRegister,
 
                             child: const Text.rich(
                               TextSpan(
@@ -916,16 +1040,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
+
           borderSide: const BorderSide(color: Color(0xFF294566)),
         ),
 
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
+
           borderSide: const BorderSide(color: Color(0xFF294566)),
         ),
 
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(13),
+
           borderSide: const BorderSide(color: Color(0xFF3478F6), width: 1.3),
         ),
       ),

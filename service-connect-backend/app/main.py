@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Query, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from datetime import date, time
 
-from .database import Base, engine
-from .routes import auth
+from fastapi import FastAPI, HTTPException, Query, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+from .database import Base, engine, get_db
+from .models import Booking
+from .schemas import BookingRequest
 
 
 # ============================================================
@@ -32,7 +34,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -41,6 +43,8 @@ app.add_middleware(
 # ============================================================
 # AUTH
 # ============================================================
+
+from .routes import auth
 
 app.include_router(auth.router)
 
@@ -86,20 +90,6 @@ providers = [
 
 
 # ============================================================
-# BOOKING MODEL
-# ============================================================
-
-class BookingRequest(BaseModel):
-    provider_id: int
-    customer_name: str = "Customer"
-    customer_email: str = ""
-    service_date: str
-    service_time: str
-    address: str
-    notes: str = ""
-
-
-# ============================================================
 # ROOT
 # ============================================================
 
@@ -129,35 +119,21 @@ def health_check():
 
 @app.get("/providers")
 def get_providers(
-    service: str | None = Query(default=None)
+    service: str | None = Query(default=None),
 ):
-
-    # No service selected
     if service is None:
         return providers
 
-    # Clean service name
     requested_service = service.strip().lower()
 
-    # All selected
     if requested_service == "" or requested_service == "all":
         return providers
 
-    # Filter
-    filtered_providers = []
-
-    for provider in providers:
-
-        provider_service = (
-            provider["service"]
-            .strip()
-            .lower()
-        )
-
-        if provider_service == requested_service:
-            filtered_providers.append(provider)
-
-    return filtered_providers
+    return [
+        provider
+        for provider in providers
+        if provider["service"].strip().lower() == requested_service
+    ]
 
 
 # ============================================================
@@ -168,7 +144,6 @@ def get_providers(
 def get_provider(provider_id: int):
 
     for provider in providers:
-
         if provider["id"] == provider_id:
             return provider
 
@@ -183,12 +158,18 @@ def get_provider(provider_id: int):
 # ============================================================
 
 @app.post("/book")
-def create_booking(booking: BookingRequest):
+def create_booking(
+    booking: BookingRequest,
+    db: Session = Depends(get_db),
+):
+
+    # --------------------------------------------------------
+    # FIND PROVIDER
+    # --------------------------------------------------------
 
     provider = None
 
     for item in providers:
-
         if item["id"] == booking.provider_id:
             provider = item
             break
@@ -199,11 +180,19 @@ def create_booking(booking: BookingRequest):
             detail="Provider not found",
         )
 
+    # --------------------------------------------------------
+    # VALIDATE ADDRESS
+    # --------------------------------------------------------
+
     if not booking.address.strip():
         raise HTTPException(
             status_code=400,
             detail="Service address is required",
         )
+
+    # --------------------------------------------------------
+    # VALIDATE DATE
+    # --------------------------------------------------------
 
     try:
         date.fromisoformat(
@@ -212,8 +201,12 @@ def create_booking(booking: BookingRequest):
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail="Invalid service date",
+            detail="Invalid service date. Use YYYY-MM-DD.",
         )
+
+    # --------------------------------------------------------
+    # VALIDATE TIME
+    # --------------------------------------------------------
 
     try:
         time.fromisoformat(
@@ -222,35 +215,188 @@ def create_booking(booking: BookingRequest):
     except ValueError:
         raise HTTPException(
             status_code=400,
-            detail="Invalid service time",
+            detail="Invalid service time. Use HH:MM.",
         )
 
-    booking_id = 1000 + booking.provider_id
+    # --------------------------------------------------------
+    # CREATE DATABASE BOOKING
+    # --------------------------------------------------------
+
+    new_booking = Booking(
+        provider_id=booking.provider_id,
+        customer_name=booking.customer_name.strip(),
+        customer_email=booking.customer_email.strip().lower(),
+        service_date=booking.service_date,
+        service_time=booking.service_time,
+        address=booking.address.strip(),
+        notes=booking.notes.strip(),
+        status="confirmed",
+    )
+
+    db.add(new_booking)
+
+    db.commit()
+
+    db.refresh(new_booking)
+
+    # --------------------------------------------------------
+    # RESPONSE
+    # --------------------------------------------------------
 
     return {
         "success": True,
         "message": "Booking confirmed successfully",
-
         "booking": {
-            "booking_id": booking_id,
-
+            "booking_id": new_booking.id,
             "provider": {
                 "id": provider["id"],
                 "name": provider["name"],
                 "service": provider["service"],
                 "price": provider["price"],
             },
-
             "customer": {
-                "name": booking.customer_name,
-                "email": booking.customer_email,
+                "name": new_booking.customer_name,
+                "email": new_booking.customer_email,
             },
+            "service_date": new_booking.service_date,
+            "service_time": new_booking.service_time,
+            "address": new_booking.address,
+            "notes": new_booking.notes,
+            "status": new_booking.status,
+        },
+    }
 
+
+# ============================================================
+# GET USER BOOKINGS
+# ============================================================
+
+@app.get("/bookings/{customer_email}")
+def get_customer_bookings(
+    customer_email: str,
+    db: Session = Depends(get_db),
+):
+
+    bookings = (
+        db.query(Booking)
+        .filter(
+            Booking.customer_email
+            == customer_email.strip().lower()
+        )
+        .order_by(Booking.id.desc())
+        .all()
+    )
+
+    result = []
+
+    for booking in bookings:
+
+        provider = next(
+            (
+                item
+                for item in providers
+                if item["id"] == booking.provider_id
+            ),
+            None,
+        )
+
+        result.append(
+            {
+                "booking_id": booking.id,
+                "provider": provider,
+                "customer_name": booking.customer_name,
+                "customer_email": booking.customer_email,
+                "service_date": booking.service_date,
+                "service_time": booking.service_time,
+                "address": booking.address,
+                "notes": booking.notes,
+                "status": booking.status,
+            }
+        )
+
+    return {
+        "success": True,
+        "count": len(result),
+        "bookings": result,
+    }
+
+
+# ============================================================
+# GET SINGLE BOOKING
+# ============================================================
+
+@app.get("/booking/{booking_id}")
+def get_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+):
+
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id)
+        .first()
+    )
+
+    if booking is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found",
+        )
+
+    provider = next(
+        (
+            item
+            for item in providers
+            if item["id"] == booking.provider_id
+        ),
+        None,
+    )
+
+    return {
+        "success": True,
+        "booking": {
+            "booking_id": booking.id,
+            "provider": provider,
+            "customer_name": booking.customer_name,
+            "customer_email": booking.customer_email,
             "service_date": booking.service_date,
             "service_time": booking.service_time,
             "address": booking.address,
             "notes": booking.notes,
+            "status": booking.status,
         },
+    }
+
+
+# ============================================================
+# DELETE BOOKING
+# ============================================================
+
+@app.delete("/booking/{booking_id}")
+def delete_booking(
+    booking_id: int,
+    db: Session = Depends(get_db),
+):
+
+    booking = (
+        db.query(Booking)
+        .filter(Booking.id == booking_id)
+        .first()
+    )
+
+    if booking is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Booking not found",
+        )
+
+    db.delete(booking)
+
+    db.commit()
+
+    return {
+        "success": True,
+        "message": "Booking deleted successfully",
     }
 
 
@@ -261,25 +407,18 @@ def create_booking(booking: BookingRequest):
 @app.post("/book/{provider_id}")
 def book_provider(provider_id: int):
 
-    provider = None
+    for provider in providers:
+        if provider["id"] == provider_id:
+            return {
+                "success": True,
+                "message": "Provider booking created",
+                "provider": provider,
+            }
 
-    for item in providers:
-
-        if item["id"] == provider_id:
-            provider = item
-            break
-
-    if provider is None:
-        raise HTTPException(
-            status_code=404,
-            detail="Provider not found",
-        )
-
-    return {
-        "success": True,
-        "message": "Provider booking created",
-        "provider": provider,
-    }
+    raise HTTPException(
+        status_code=404,
+        detail="Provider not found",
+    )
 
 
 # ============================================================
@@ -290,16 +429,14 @@ def book_provider(provider_id: int):
 def get_services():
 
     services = sorted(
-        list(
-            set(
-                provider["service"]
-                for provider in providers
-            )
-        )
+        {
+            provider["service"]
+            for provider in providers
+        }
     )
 
     return {
-        "services": services
+        "services": services,
     }
 
 
@@ -314,16 +451,31 @@ def api_info():
         "name": "ServiceConnect",
         "version": "1.0.0",
         "backend": "FastAPI",
-
+        "database": "SQLite",
+        "backend_framework": "FastAPI + SQLAlchemy",
         "endpoints": {
             "providers": "/providers",
+            "provider": "/providers/{provider_id}",
             "services": "/services",
             "booking": "/book",
+            "bookings": "/bookings/{customer_email}",
+            "booking_details": "/booking/{booking_id}",
+            "delete_booking": "/booking/{booking_id}",
             "health": "/health",
+            "login": "/auth/login",
+            "register": "/auth/register",
+            "forgot_password": "/auth/forgot-password",
         },
     }
+
+
+# ============================================================
+# DEBUG PROVIDERS
+# ============================================================
+
 @app.get("/debug/providers")
 def debug_providers():
+
     return {
         "file": __file__,
         "providers": providers,

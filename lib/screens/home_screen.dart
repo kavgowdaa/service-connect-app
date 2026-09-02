@@ -3,9 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/service_provider.dart';
 import '../providers/service_providers_provider.dart';
-import '../services/api_service.dart';
 import 'provider_details_screen.dart';
 import 'booking_screen.dart';
+import 'my_bookings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -15,12 +15,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final ApiService api = ApiService();
   final TextEditingController searchController = TextEditingController();
-
-  List<ServiceProvider> providers = [];
-
-  bool loading = false;
 
   String selectedService = 'All';
 
@@ -32,51 +27,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     {'name': 'Carpentry', 'icon': Icons.carpenter_rounded},
   ];
 
-  @override
-  void initState() {
-    super.initState();
-    loadProviders();
+  // ============================================================
+  // CURRENT SERVICE
+  // ============================================================
+
+  String get currentService {
+    return selectedService == 'All' ? '' : selectedService;
   }
 
   // ============================================================
-  // LOAD PROVIDERS
+  // INIT
   // ============================================================
 
-  Future<void> loadProviders({String? query}) async {
-    if (mounted) {
-      setState(() {
-        loading = true;
-      });
-    }
+  @override
+  void initState() {
+    super.initState();
 
-    try {
-      final data = await api.getProviders(service: query);
+    // Riverpod automatically loads the providers when watched.
+  }
 
-      if (!mounted) return;
+  // ============================================================
+  // DISPOSE
+  // ============================================================
 
-      final List<ServiceProvider> convertedProviders = data
-          .map(
-            (json) => ServiceProvider.fromJson(Map<String, dynamic>.from(json)),
-          )
-          .toList();
-
-      setState(() {
-        providers = convertedProviders;
-        loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-      });
-
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Unable to load providers')));
-
-      debugPrint('HOME PROVIDERS ERROR: $e');
-    }
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
   }
 
   // ============================================================
@@ -86,17 +63,49 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void selectService(String service) {
     setState(() {
       selectedService = service;
+      searchController.clear();
     });
 
-    loadProviders(query: service == 'All' ? '' : service);
-
-    ref.invalidate(serviceProvidersProvider(service == 'All' ? '' : service));
+    // Refresh the newly selected service.
+    ref.invalidate(serviceProvidersProvider(currentService));
   }
 
-  @override
-  void dispose() {
-    searchController.dispose();
-    super.dispose();
+  // ============================================================
+  // SEARCH
+  // ============================================================
+
+  void searchProviders() {
+    final query = searchController.text.trim();
+
+    if (query.isEmpty) {
+      // Return to selected service.
+      ref.invalidate(serviceProvidersProvider(currentService));
+      return;
+    }
+
+    /*
+     * The backend /providers endpoint accepts the service as
+     * a query parameter.
+     *
+     * Therefore search text is treated as a service/search term.
+     *
+     * Example:
+     * plumbing
+     * cleaning
+     * electrical
+     */
+    ref.invalidate(serviceProvidersProvider(query));
+  }
+
+  // ============================================================
+  // REFRESH
+  // ============================================================
+
+  Future<void> refreshProviders() async {
+    ref.invalidate(serviceProvidersProvider(currentService));
+
+    // Wait until the provider starts loading again.
+    await ref.read(serviceProvidersProvider(currentService).future);
   }
 
   // ============================================================
@@ -105,17 +114,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final providerAsync = ref.watch(serviceProvidersProvider(currentService));
+
     return Scaffold(
       backgroundColor: const Color(0xFF071A33),
       body: SafeArea(
         child: RefreshIndicator(
           color: const Color(0xFF216BFF),
           backgroundColor: const Color(0xFF102846),
-          onRefresh: () {
-            return loadProviders(
-              query: selectedService == 'All' ? '' : selectedService,
-            );
-          },
+          onRefresh: refreshProviders,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
@@ -135,99 +142,57 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               SliverToBoxAdapter(child: _buildServices()),
 
               // ==================================================
-              // SECTION TITLE
-              // ==================================================
-              SliverToBoxAdapter(child: _buildSectionTitle()),
-
-              // ==================================================
               // PROVIDERS
               // ==================================================
-              Consumer(
-                builder: (context, ref, child) {
-                  final providerAsync = ref.watch(
-                    serviceProvidersProvider(
-                      selectedService == 'All' ? '' : selectedService,
+              providerAsync.when(
+                // ------------------------------------------------
+                // LOADING
+                // ------------------------------------------------
+                loading: () {
+                  return const SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF3478F6),
+                      ),
                     ),
                   );
+                },
 
-                  return providerAsync.when(
-                    // ------------------------------------------------
-                    // LOADING
-                    // ------------------------------------------------
-                    loading: () {
-                      return const SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: CircularProgressIndicator(
-                            color: Color(0xFF3478F6),
-                          ),
-                        ),
-                      );
-                    },
+                // ------------------------------------------------
+                // ERROR
+                // ------------------------------------------------
+                error: (error, stackTrace) {
+                  debugPrint('RIVERPOD PROVIDER ERROR: $error');
 
-                    // ------------------------------------------------
-                    // ERROR
-                    // ------------------------------------------------
-                    error: (error, stackTrace) {
-                      debugPrint('RIVERPOD PROVIDER ERROR: $error');
+                  return SliverFillRemaining(
+                    hasScrollBody: false,
+                    child: _buildErrorState(),
+                  );
+                },
 
-                      return SliverFillRemaining(
-                        hasScrollBody: false,
-                        child: Center(
-                          child: Padding(
-                            padding: const EdgeInsets.all(30),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Icon(
-                                  Icons.cloud_off_rounded,
-                                  color: Color(0xFF7189AA),
-                                  size: 50,
-                                ),
-                                const SizedBox(height: 15),
-                                const Text(
-                                  'Unable to load providers',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                TextButton(
-                                  onPressed: () {
-                                    ref.invalidate(
-                                      serviceProvidersProvider(
-                                        selectedService == 'All'
-                                            ? ''
-                                            : selectedService,
-                                      ),
-                                    );
-                                  },
-                                  child: const Text(
-                                    'Try Again',
-                                    style: TextStyle(color: Color(0xFF4B8BFF)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                // ------------------------------------------------
+                // DATA
+                // ------------------------------------------------
+                data: (providerList) {
+                  if (providerList.isEmpty) {
+                    return SliverList(
+                      delegate: SliverChildListDelegate([
+                        _buildSectionTitle(0),
+                        SizedBox(height: 320, child: _buildEmptyState()),
+                      ]),
+                    );
+                  }
 
-                    // ------------------------------------------------
-                    // DATA
-                    // ------------------------------------------------
-                    data: (providerList) {
-                      if (providerList.isEmpty) {
-                        return SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: _buildEmptyState(),
-                        );
-                      }
+                  return SliverMainAxisGroup(
+                    slivers: [
+                      // SECTION TITLE
+                      SliverToBoxAdapter(
+                        child: _buildSectionTitle(providerList.length),
+                      ),
 
-                      return SliverPadding(
+                      // PROVIDER LIST
+                      SliverPadding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
                         sliver: SliverList(
                           delegate: SliverChildBuilderDelegate((
@@ -240,8 +205,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             return _buildProviderCard(provider);
                           }, childCount: providerList.length),
                         ),
-                      );
-                    },
+                      ),
+                    ],
                   );
                 },
               ),
@@ -309,7 +274,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ),
 
-          // NOTIFICATION
+          // MY BOOKINGS
           Container(
             height: 44,
             width: 44,
@@ -319,9 +284,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               border: Border.all(color: const Color(0xFF284465)),
             ),
             child: IconButton(
-              onPressed: () {},
+              tooltip: 'My Bookings',
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const MyBookingsScreen()),
+                );
+              },
               icon: const Icon(
-                Icons.notifications_none_rounded,
+                Icons.calendar_month_rounded,
                 color: Colors.white,
                 size: 22,
               ),
@@ -349,29 +320,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: TextField(
           controller: searchController,
           style: const TextStyle(color: Colors.white),
+          textInputAction: TextInputAction.search,
+
           decoration: InputDecoration(
             hintText: 'Search plumbing, cleaning...',
             hintStyle: const TextStyle(color: Color(0xFF7186A5)),
+
             prefixIcon: const Icon(
               Icons.search_rounded,
               color: Color(0xFF7F94B2),
             ),
-            suffixIcon: IconButton(
-              onPressed: () {
-                final query = searchController.text.trim();
 
-                loadProviders(query: query);
-              },
+            suffixIcon: IconButton(
+              tooltip: 'Search',
+              onPressed: searchProviders,
               icon: const Icon(
                 Icons.arrow_forward_rounded,
                 color: Color(0xFF4B8BFF),
               ),
             ),
+
             border: InputBorder.none,
+
             contentPadding: const EdgeInsets.symmetric(vertical: 18),
           ),
-          onSubmitted: (value) {
-            loadProviders(query: value.trim());
+
+          onSubmitted: (_) {
+            searchProviders();
           },
         ),
       ),
@@ -404,7 +379,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               onTap: () {
                 selectService(name);
               },
-              child: Container(
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
                 width: 82,
                 margin: const EdgeInsets.only(right: 12),
                 decoration: BoxDecoration(
@@ -415,13 +391,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           colors: [Color(0xFF236BFF), Color(0xFF5C55E8)],
                         )
                       : null,
+
                   color: selected ? null : const Color(0xFF102846),
+
                   borderRadius: BorderRadius.circular(17),
+
                   border: Border.all(
                     color: selected
                         ? const Color(0xFF3B7DFF)
                         : const Color(0xFF294566),
                   ),
+
                   boxShadow: selected
                       ? [
                           BoxShadow(
@@ -433,6 +413,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ]
                       : null,
                 ),
+
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -441,7 +422,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       color: selected ? Colors.white : const Color(0xFF7E96B7),
                       size: 25,
                     ),
+
                     const SizedBox(height: 8),
+
                     Text(
                       name,
                       style: TextStyle(
@@ -466,7 +449,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   // SECTION TITLE
   // ============================================================
 
-  Widget _buildSectionTitle() {
+  Widget _buildSectionTitle(int count) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
       child: Row(
@@ -481,9 +464,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
             ),
           ),
+
           Text(
-            '${providers.length} available',
-            style: const TextStyle(color: Color(0xFF6E86A7), fontSize: 12),
+            '$count available',
+            style: const TextStyle(
+              color: Color(0xFF6E86A7),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -526,6 +514,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
           ],
         ),
+
         child: Column(
           children: [
             // ==================================================
@@ -576,7 +565,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                               ),
                             ),
                           ),
+
                           const SizedBox(width: 5),
+
                           const Icon(
                             Icons.verified_rounded,
                             color: Color(0xFF35D07F),
@@ -620,6 +611,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                 ),
 
+                const SizedBox(width: 8),
+
                 // RATING
                 Container(
                   padding: const EdgeInsets.symmetric(
@@ -631,13 +624,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     borderRadius: BorderRadius.circular(9),
                   ),
                   child: Row(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(
                         Icons.star_rounded,
                         color: Color(0xFFFFC857),
                         size: 15,
                       ),
+
                       const SizedBox(width: 3),
+
                       Text(
                         rating.toStringAsFixed(1),
                         style: const TextStyle(
@@ -691,6 +687,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
+
                     const Text(
                       'per hour',
                       style: TextStyle(color: Color(0xFF7189AA), fontSize: 10),
@@ -740,6 +737,80 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   // ============================================================
+  // ERROR STATE
+  // ============================================================
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              height: 75,
+              width: 75,
+              decoration: BoxDecoration(
+                color: const Color(0xFF102846),
+                borderRadius: BorderRadius.circular(22),
+              ),
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                color: Color(0xFF7189AA),
+                size: 35,
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              'Unable to load providers',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            const Text(
+              'Please check your connection and try again.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Color(0xFF7189AA), fontSize: 13),
+            ),
+
+            const SizedBox(height: 18),
+
+            ElevatedButton(
+              onPressed: () {
+                ref.invalidate(serviceProvidersProvider(currentService));
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF216BFF),
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: const Text(
+                'Try Again',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
   // EMPTY STATE
   // ============================================================
 
@@ -781,6 +852,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               'Try another service or search again.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Color(0xFF7189AA), fontSize: 13),
+            ),
+
+            const SizedBox(height: 18),
+
+            TextButton(
+              onPressed: () {
+                setState(() {
+                  selectedService = 'All';
+                  searchController.clear();
+                });
+
+                ref.invalidate(serviceProvidersProvider(''));
+              },
+              child: const Text(
+                'Show All Providers',
+                style: TextStyle(
+                  color: Color(0xFF4B8BFF),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
