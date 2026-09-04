@@ -20,32 +20,27 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   final FlutterSecureStorage secureStorage = const FlutterSecureStorage();
 
   // ============================================================
-  // STATE
-  // ============================================================
-
-  bool loading = true;
-
-  String? error;
-
-  List<dynamic> bookings = [];
-
-  String customerEmail = '';
-
-  static const String emailKey = 'user_email';
-
-  // ============================================================
   // COLORS
   // ============================================================
 
   final Color backgroundColor = const Color(0xFF071A33);
-
   final Color cardColor = const Color(0xFF102846);
-
   final Color borderColor = const Color(0xFF294566);
-
   final Color primaryColor = const Color(0xFF216BFF);
-
   final Color secondaryColor = const Color(0xFF7189AA);
+
+  // ============================================================
+  // STATE
+  // ============================================================
+
+  List<dynamic> bookings = [];
+
+  bool loading = true;
+  bool deleting = false;
+
+  String customerEmail = '';
+
+  String errorMessage = '';
 
   // ============================================================
   // INIT
@@ -55,77 +50,7 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   void initState() {
     super.initState();
 
-    loadUserEmail();
-  }
-
-  // ============================================================
-  // LOAD USER EMAIL
-  // ============================================================
-
-  Future<void> loadUserEmail() async {
-    try {
-      String? savedEmail = await secureStorage.read(key: emailKey);
-
-      // ----------------------------------------------------------
-      // FALLBACK
-      // ----------------------------------------------------------
-
-      if (savedEmail == null || savedEmail.trim().isEmpty) {
-        savedEmail = await secureStorage.read(key: 'saved_email');
-      }
-
-      // ----------------------------------------------------------
-      // IMPORTANT:
-      // Check mounted after async operation.
-      // ----------------------------------------------------------
-
-      if (!mounted) return;
-
-      // ----------------------------------------------------------
-      // NO USER
-      // ----------------------------------------------------------
-
-      if (savedEmail == null || savedEmail.trim().isEmpty) {
-        setState(() {
-          loading = false;
-          error = 'No logged-in user found.';
-        });
-
-        return;
-      }
-
-      // ----------------------------------------------------------
-      // SAVE EMAIL
-      // ----------------------------------------------------------
-
-      final email = savedEmail.trim().toLowerCase();
-
-      setState(() {
-        customerEmail = email;
-      });
-
-      debugPrint('================================');
-      debugPrint('MY BOOKINGS');
-      debugPrint('CUSTOMER EMAIL: $customerEmail');
-      debugPrint('================================');
-
-      // ----------------------------------------------------------
-      // LOAD BOOKINGS
-      // ----------------------------------------------------------
-
-      await loadBookings();
-
-      if (!mounted) return;
-    } catch (e) {
-      debugPrint('LOAD USER EMAIL ERROR: $e');
-
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-        error = 'Unable to get logged-in user.';
-      });
-    }
+    loadBookings();
   }
 
   // ============================================================
@@ -133,137 +58,158 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   // ============================================================
 
   Future<void> loadBookings() async {
-    // ----------------------------------------------------------
-    // CHECK EMAIL
-    // ----------------------------------------------------------
-
-    if (customerEmail.trim().isEmpty) {
-      if (!mounted) return;
-
-      setState(() {
-        loading = false;
-        error = 'No logged-in user found.';
-      });
-
-      return;
-    }
-
     if (!mounted) return;
 
     setState(() {
       loading = true;
-      error = null;
+      errorMessage = '';
     });
 
     try {
-      debugPrint('================================');
-      debugPrint('LOADING BOOKINGS');
-      debugPrint('EMAIL: $customerEmail');
-      debugPrint('================================');
+      String? savedEmail = await secureStorage.read(key: 'user_email');
 
-      // ----------------------------------------------------------
-      // API CALL
-      // ----------------------------------------------------------
+      if (savedEmail == null || savedEmail.trim().isEmpty) {
+        savedEmail = await secureStorage.read(key: 'saved_email');
+      }
 
-      final result = await api.getBookings(customerEmail);
+      final email = savedEmail?.trim().toLowerCase() ?? '';
 
-      debugPrint('BOOKINGS API RESULT: $result');
+      debugPrint('==========================================');
+      debugPrint('MY BOOKINGS');
+      debugPrint('USER EMAIL: $email');
+      debugPrint('==========================================');
 
-      debugPrint('BOOKINGS TYPE: ${result.runtimeType}');
+      if (email.isEmpty) {
+        throw Exception('Please login again to view your bookings.');
+      }
 
-      // ----------------------------------------------------------
-      // IMPORTANT:
-      // Check mounted after API call.
-      // ----------------------------------------------------------
+      final result = await api.getBookings(email);
+
+      debugPrint('BOOKINGS RECEIVED: ${result.length}');
 
       if (!mounted) return;
 
       setState(() {
+        customerEmail = email;
         bookings = result;
         loading = false;
-        error = null;
+        errorMessage = '';
       });
-    } catch (e, stackTrace) {
-      debugPrint('================================');
-      debugPrint('LOAD BOOKINGS ERROR');
-      debugPrint('ERROR: $e');
-      debugPrint('STACK: $stackTrace');
-      debugPrint('================================');
+    } catch (e) {
+      debugPrint('MY BOOKINGS ERROR: $e');
 
       if (!mounted) return;
 
       setState(() {
         loading = false;
-        error = e.toString().replaceFirst('Exception: ', '');
+        errorMessage = _cleanError(e);
+        bookings = [];
       });
     }
   }
 
   // ============================================================
-  // DELETE BOOKING
+  // PULL TO REFRESH
   // ============================================================
 
-  Future<void> deleteBooking(int bookingId) async {
-    // ==========================================================
+  Future<void> refreshBookings() async {
+    try {
+      String? savedEmail = await secureStorage.read(key: 'user_email');
+
+      if (savedEmail == null || savedEmail.trim().isEmpty) {
+        savedEmail = await secureStorage.read(key: 'saved_email');
+      }
+
+      final email = savedEmail?.trim().toLowerCase() ?? '';
+
+      if (email.isEmpty) {
+        throw Exception('Please login again to view your bookings.');
+      }
+
+      final result = await api.getBookings(email);
+
+      if (!mounted) return;
+
+      setState(() {
+        customerEmail = email;
+        bookings = result;
+        errorMessage = '';
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(_cleanError(e)),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  // ============================================================
+  // DELETE / CANCEL BOOKING
+  // ============================================================
+
+  Future<void> cancelBooking(dynamic booking) async {
+    final bookingId = _getBookingId(booking);
+
+    if (bookingId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid booking ID.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+
+      return;
+    }
+
+    // ============================================================
     // CONFIRMATION DIALOG
-    // ==========================================================
+    // ============================================================
 
-    if (!mounted) return;
-
-    final bool? confirmed = await showDialog<bool>(
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
           backgroundColor: cardColor,
-
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(20),
           ),
-
           title: const Text(
-            'Delete Booking?',
+            'Cancel Booking?',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
           ),
-
           content: const Text(
-            'Are you sure you want to delete this booking? '
+            'Are you sure you want to cancel this booking? '
             'This action cannot be undone.',
-            style: TextStyle(color: Color(0xFF9AAEC7), fontSize: 13),
+            style: TextStyle(color: Color(0xFF8DA1BD), height: 1.4),
           ),
-
           actions: [
-            // ----------------------------------------------------
-            // CANCEL
-            // ----------------------------------------------------
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(false);
               },
-
               child: const Text(
-                'Cancel',
-                style: TextStyle(color: Color(0xFF8EA3BE)),
+                'Keep Booking',
+                style: TextStyle(
+                  color: Color(0xFF8DA1BD),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
-
-            // ----------------------------------------------------
-            // DELETE
-            // ----------------------------------------------------
             ElevatedButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop(true);
               },
-
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
-
                 foregroundColor: Colors.white,
-
                 elevation: 0,
               ),
-
               child: const Text(
-                'Delete',
+                'Cancel Booking',
                 style: TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
@@ -272,103 +218,61 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       },
     );
 
-    // ==========================================================
-    // CHECK AFTER DIALOG
-    // ==========================================================
+    if (confirmed != true) return;
 
     if (!mounted) return;
 
-    if (confirmed != true) {
-      return;
-    }
-
-    // ==========================================================
-    // SHOW LOADING DIALOG
-    // ==========================================================
-
-    if (!mounted) return;
-
-    showDialog<void>(
-      context: context,
-
-      barrierDismissible: false,
-
-      builder: (_) {
-        return const Center(
-          child: CircularProgressIndicator(color: Color(0xFF216BFF)),
-        );
-      },
-    );
-
-    // ==========================================================
-    // DELETE FROM API
-    // ==========================================================
+    setState(() {
+      deleting = true;
+    });
 
     try {
-      debugPrint('================================');
-      debugPrint('DELETE BOOKING');
+      debugPrint('==========================================');
+      debugPrint('CANCEL BOOKING');
       debugPrint('BOOKING ID: $bookingId');
-      debugPrint('================================');
+      debugPrint('==========================================');
 
       final success = await api.deleteBooking(bookingId);
 
-      debugPrint('DELETE RESULT: $success');
-
-      // ========================================================
-      // CHECK AFTER API CALL
-      // ========================================================
-
       if (!mounted) return;
-
-      // ========================================================
-      // CLOSE LOADING DIALOG
-      // ========================================================
-
-      Navigator.of(context).pop();
-
-      // ========================================================
-      // SUCCESS
-      // ========================================================
 
       if (success) {
         setState(() {
-          bookings.removeWhere(
-            (booking) =>
-                booking['booking_id']?.toString() == bookingId.toString(),
-          );
-        });
+          bookings.removeWhere((item) => _getBookingId(item) == bookingId);
 
-        if (!mounted) return;
+          deleting = false;
+        });
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Booking deleted successfully'),
-            backgroundColor: Color(0xFF1D9E62),
+            content: Text('Booking cancelled successfully.'),
+            backgroundColor: Color(0xFF35D07F),
+          ),
+        );
+      } else {
+        setState(() {
+          deleting = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to cancel booking.'),
+            backgroundColor: Colors.redAccent,
           ),
         );
       }
     } catch (e) {
-      debugPrint('DELETE BOOKING ERROR: $e');
-
-      // ========================================================
-      // CHECK BEFORE USING CONTEXT
-      // ========================================================
+      debugPrint('CANCEL BOOKING ERROR: $e');
 
       if (!mounted) return;
 
-      // ========================================================
-      // CLOSE LOADING DIALOG
-      // ========================================================
-
-      Navigator.of(context).pop();
-
-      // ========================================================
-      // SHOW ERROR
-      // ========================================================
+      setState(() {
+        deleting = false;
+      });
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Unable to delete booking: $e'),
+          content: Text('Cancellation failed: ${_cleanError(e)}'),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -376,348 +280,223 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   }
 
   // ============================================================
-  // FORMAT DATE
+  // GET BOOKING ID
   // ============================================================
 
-  String formatDate(String date) {
-    try {
-      final parsed = DateTime.parse(date);
+  int? _getBookingId(dynamic booking) {
+    if (booking is! Map) return null;
 
-      return '${parsed.day.toString().padLeft(2, '0')}/'
-          '${parsed.month.toString().padLeft(2, '0')}/'
-          '${parsed.year}';
+    final value =
+        booking['booking_id'] ?? booking['id'] ?? booking['bookingId'];
+
+    if (value == null) return null;
+
+    if (value is int) {
+      return value;
+    }
+
+    return int.tryParse(value.toString());
+  }
+
+  // ============================================================
+  // GET VALUE
+  // ============================================================
+
+  String _getValue(dynamic booking, List<String> keys, {String fallback = ''}) {
+    if (booking is! Map) return fallback;
+
+    for (final key in keys) {
+      final value = booking[key];
+
+      if (value != null && value.toString().trim().isNotEmpty) {
+        return value.toString().trim();
+      }
+    }
+
+    return fallback;
+  }
+
+  // ============================================================
+  // PROVIDER NAME
+  // ============================================================
+
+  String _providerName(dynamic booking) {
+    if (booking is! Map) {
+      return 'Service Provider';
+    }
+
+    final direct = _getValue(booking, [
+      'provider_name',
+      'providerName',
+      'provider',
+      'name',
+    ]);
+
+    // FIX:
+    // _getValue() already returns String,
+    // so there is no need for "direct is String".
+
+    if (direct.isNotEmpty && direct != 'null') {
+      return direct;
+    }
+
+    final provider = booking['provider'];
+
+    if (provider is Map) {
+      return _getValue(provider, [
+        'name',
+        'provider_name',
+      ], fallback: 'Service Provider');
+    }
+
+    return 'Service Provider';
+  }
+
+  // ============================================================
+  // SERVICE NAME
+  // ============================================================
+
+  String _serviceName(dynamic booking) {
+    return _getValue(booking, [
+      'service',
+      'service_name',
+      'serviceName',
+    ], fallback: 'Service');
+  }
+
+  // ============================================================
+  // DATE
+  // ============================================================
+
+  String _formatDate(dynamic booking) {
+    final value = _getValue(booking, ['service_date', 'serviceDate', 'date']);
+
+    if (value.isEmpty) {
+      return 'Date not available';
+    }
+
+    try {
+      final date = DateTime.parse(value);
+
+      return '${date.day.toString().padLeft(2, '0')}/'
+          '${date.month.toString().padLeft(2, '0')}/'
+          '${date.year}';
     } catch (_) {
-      return date;
+      return value;
     }
   }
 
   // ============================================================
-  // BOOKING CARD
+  // TIME
   // ============================================================
 
-  Widget bookingCard(Map<String, dynamic> booking) {
-    // ----------------------------------------------------------
-    // PROVIDER
-    // ----------------------------------------------------------
+  String _formatTime(dynamic booking) {
+    final value = _getValue(booking, ['service_time', 'serviceTime', 'time']);
 
-    final provider = booking['provider'] is Map
-        ? Map<String, dynamic>.from(booking['provider'])
-        : <String, dynamic>{};
+    if (value.isEmpty) {
+      return 'Time not available';
+    }
 
-    // ----------------------------------------------------------
-    // VALUES
-    // ----------------------------------------------------------
+    try {
+      final parts = value.split(':');
 
-    final String providerName = provider['name']?.toString() ?? 'Provider';
+      if (parts.length < 2) {
+        return value;
+      }
 
-    final String service = provider['service']?.toString() ?? 'Service';
+      int hour = int.parse(parts[0]);
 
-    final String price = provider['price']?.toString() ?? '0';
+      final minute = parts[1];
 
-    final String date = booking['service_date']?.toString() ?? '';
+      final period = hour >= 12 ? 'PM' : 'AM';
 
-    final String time = booking['service_time']?.toString() ?? '';
+      hour = hour % 12;
 
-    final String address = booking['address']?.toString() ?? '';
+      if (hour == 0) {
+        hour = 12;
+      }
 
-    final String notes = booking['notes']?.toString() ?? '';
-
-    final String status = booking['status']?.toString() ?? 'confirmed';
-
-    final int? bookingId = int.tryParse(
-      booking['booking_id']?.toString() ?? '',
-    );
-
-    final String firstLetter = providerName.isNotEmpty
-        ? providerName[0].toUpperCase()
-        : 'P';
-
-    // ==========================================================
-    // CARD
-    // ==========================================================
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-
-      padding: const EdgeInsets.all(17),
-
-      decoration: BoxDecoration(
-        color: cardColor,
-
-        borderRadius: BorderRadius.circular(19),
-
-        border: Border.all(color: borderColor),
-      ),
-
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-
-        children: [
-          // ====================================================
-          // PROVIDER ROW
-          // ====================================================
-          Row(
-            children: [
-              // ------------------------------------------------
-              // AVATAR
-              // ------------------------------------------------
-              Container(
-                height: 50,
-                width: 50,
-
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF216BFF), Color(0xFF604DE4)],
-                  ),
-
-                  borderRadius: BorderRadius.circular(14),
-                ),
-
-                child: Center(
-                  child: Text(
-                    firstLetter,
-
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 12),
-
-              // ------------------------------------------------
-              // PROVIDER DETAILS
-              // ------------------------------------------------
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-
-                  children: [
-                    Text(
-                      providerName,
-
-                      maxLines: 1,
-
-                      overflow: TextOverflow.ellipsis,
-
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-
-                    const SizedBox(height: 4),
-
-                    Text(
-                      service.toUpperCase(),
-
-                      style: TextStyle(
-                        color: secondaryColor,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.7,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ------------------------------------------------
-              // STATUS
-              // ------------------------------------------------
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-
-                decoration: BoxDecoration(
-                  color: const Color(0xFF35D07F).withValues(alpha: 0.12),
-
-                  borderRadius: BorderRadius.circular(20),
-                ),
-
-                child: Text(
-                  status.toUpperCase(),
-
-                  style: const TextStyle(
-                    color: Color(0xFF35D07F),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 18),
-
-          // ====================================================
-          // DATE + TIME
-          // ====================================================
-          Row(
-            children: [
-              Expanded(
-                child: _infoRow(
-                  Icons.calendar_month_rounded,
-                  'DATE',
-                  formatDate(date),
-                ),
-              ),
-
-              const SizedBox(width: 12),
-
-              Expanded(
-                child: _infoRow(Icons.access_time_rounded, 'TIME', time),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 15),
-
-          // ====================================================
-          // ADDRESS
-          // ====================================================
-          _infoRow(Icons.location_on_outlined, 'ADDRESS', address),
-
-          // ====================================================
-          // NOTES
-          // ====================================================
-          if (notes.isNotEmpty) ...[
-            const SizedBox(height: 15),
-
-            _infoRow(Icons.notes_rounded, 'NOTES', notes),
-          ],
-
-          const SizedBox(height: 17),
-
-          // ====================================================
-          // PRICE
-          // ====================================================
-          Container(
-            padding: const EdgeInsets.only(top: 14),
-
-            decoration: const BoxDecoration(
-              border: Border(top: BorderSide(color: Color(0xFF294566))),
-            ),
-
-            child: Row(
-              children: [
-                Text(
-                  'Service Price',
-
-                  style: TextStyle(color: secondaryColor, fontSize: 11),
-                ),
-
-                const Spacer(),
-
-                Text(
-                  '₹$price / hour',
-
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 14),
-
-          // ====================================================
-          // DELETE BUTTON
-          // ====================================================
-          SizedBox(
-            width: double.infinity,
-
-            height: 42,
-
-            child: OutlinedButton.icon(
-              onPressed: bookingId == null
-                  ? null
-                  : () {
-                      deleteBooking(bookingId);
-                    },
-
-              icon: const Icon(Icons.delete_outline_rounded, size: 18),
-
-              label: const Text(
-                'Delete Booking',
-
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-              ),
-
-              style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.redAccent,
-
-                side: const BorderSide(color: Colors.redAccent),
-
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(11),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+      return '$hour:$minute $period';
+    } catch (_) {
+      return value;
+    }
   }
 
   // ============================================================
-  // INFO ROW
+  // ADDRESS
   // ============================================================
 
-  Widget _infoRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  String _address(dynamic booking) {
+    return _getValue(booking, [
+      'address',
+      'service_address',
+      'serviceAddress',
+    ], fallback: 'Address not available');
+  }
 
-      children: [
-        Icon(icon, color: primaryColor, size: 18),
+  // ============================================================
+  // NOTES
+  // ============================================================
 
-        const SizedBox(width: 8),
+  String _notes(dynamic booking) {
+    return _getValue(booking, ['notes', 'note']);
+  }
 
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+  // ============================================================
+  // STATUS
+  // ============================================================
 
-            children: [
-              Text(
-                label,
+  String _status(dynamic booking) {
+    return _getValue(booking, [
+      'status',
+      'booking_status',
+      'bookingStatus',
+    ], fallback: 'Confirmed');
+  }
 
-                style: TextStyle(
-                  color: secondaryColor,
-                  fontSize: 8,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.5,
-                ),
-              ),
+  // ============================================================
+  // STATUS COLOR
+  // ============================================================
 
-              const SizedBox(height: 3),
+  Color _statusColor(String status) {
+    final value = status.toLowerCase();
 
-              Text(
-                value.isEmpty ? '-' : value,
+    if (value.contains('cancel')) {
+      return Colors.redAccent;
+    }
 
-                maxLines: 2,
+    if (value.contains('complete')) {
+      return const Color(0xFF35D07F);
+    }
 
-                overflow: TextOverflow.ellipsis,
+    if (value.contains('pending')) {
+      return Colors.orangeAccent;
+    }
 
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return const Color(0xFF35D07F);
+  }
+
+  // ============================================================
+  // CLEAN ERROR
+  // ============================================================
+
+  String _cleanError(dynamic error) {
+    String message = error.toString();
+
+    if (message.startsWith('Exception: ')) {
+      message = message.substring(11);
+    }
+
+    return message;
+  }
+
+  // ============================================================
+  // DISPOSE
+  // ============================================================
+
+  @override
+  void dispose() {
+    super.dispose();
   }
 
   // ============================================================
@@ -734,49 +513,190 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
       // ========================================================
       appBar: AppBar(
         backgroundColor: backgroundColor,
-
         foregroundColor: Colors.white,
-
         elevation: 0,
 
         title: const Text(
           'My Bookings',
-
           style: TextStyle(fontSize: 19, fontWeight: FontWeight.w800),
         ),
+
+        actions: [
+          IconButton(
+            onPressed: loading ? null : loadBookings,
+            icon: const Icon(Icons.refresh_rounded, size: 22),
+            tooltip: 'Refresh',
+          ),
+        ],
       ),
 
       // ========================================================
       // BODY
       // ========================================================
-      body: RefreshIndicator(
-        color: primaryColor,
+      body: _buildBody(),
+    );
+  }
 
-        backgroundColor: cardColor,
+  // ============================================================
+  // BODY
+  // ============================================================
 
-        onRefresh: loadBookings,
+  Widget _buildBody() {
+    // ==========================================================
+    // LOADING
+    // ==========================================================
 
-        child: loading
-            ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF216BFF)),
-              )
-            : error != null
-            ? _buildError()
-            : bookings.isEmpty
-            ? _buildEmpty()
-            : ListView.builder(
-                physics: const AlwaysScrollableScrollPhysics(),
-
-                padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
-
-                itemCount: bookings.length,
-
-                itemBuilder: (context, index) {
-                  final booking = Map<String, dynamic>.from(bookings[index]);
-
-                  return bookingCard(booking);
-                },
+    if (loading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const SizedBox(
+              height: 30,
+              width: 30,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.5,
+                color: Color(0xFF216BFF),
               ),
+            ),
+
+            const SizedBox(height: 15),
+
+            Text(
+              'Loading your bookings...',
+              style: TextStyle(color: secondaryColor, fontSize: 12),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // ==========================================================
+    // ERROR
+    // ==========================================================
+
+    if (errorMessage.isNotEmpty) {
+      return _buildErrorState();
+    }
+
+    // ==========================================================
+    // EMPTY
+    // ==========================================================
+
+    if (bookings.isEmpty) {
+      return _buildEmptyState();
+    }
+
+    // ==========================================================
+    // BOOKINGS
+    // ==========================================================
+
+    return RefreshIndicator(
+      color: primaryColor,
+      backgroundColor: cardColor,
+      onRefresh: refreshBookings,
+
+      child: ListView.builder(
+        physics: const AlwaysScrollableScrollPhysics(),
+
+        padding: const EdgeInsets.fromLTRB(18, 8, 18, 30),
+
+        itemCount: bookings.length,
+
+        itemBuilder: (context, index) {
+          final booking = bookings[index];
+
+          return _buildBookingCard(booking, index);
+        },
+      ),
+    );
+  }
+
+  // ============================================================
+  // ERROR STATE
+  // ============================================================
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+
+          children: [
+            Container(
+              height: 72,
+              width: 72,
+
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+
+              child: const Icon(
+                Icons.cloud_off_rounded,
+                color: Colors.redAccent,
+                size: 34,
+              ),
+            ),
+
+            const SizedBox(height: 18),
+
+            const Text(
+              'Unable to load bookings',
+              textAlign: TextAlign.center,
+
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: 9),
+
+            Text(
+              errorMessage,
+              textAlign: TextAlign.center,
+
+              style: TextStyle(
+                color: secondaryColor,
+                fontSize: 12,
+                height: 1.4,
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            SizedBox(
+              height: 45,
+
+              child: ElevatedButton.icon(
+                onPressed: loadBookings,
+
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+
+                label: const Text(
+                  'Try Again',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryColor,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+
+                  padding: const EdgeInsets.symmetric(horizontal: 20),
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -785,114 +705,543 @@ class _MyBookingsScreenState extends State<MyBookingsScreen> {
   // EMPTY STATE
   // ============================================================
 
-  Widget _buildEmpty() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
+  Widget _buildEmptyState() {
+    return RefreshIndicator(
+      color: primaryColor,
+      backgroundColor: cardColor,
+      onRefresh: refreshBookings,
 
-      children: [
-        SizedBox(height: MediaQuery.of(context).size.height * 0.28),
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
 
-        Icon(Icons.calendar_today_outlined, color: secondaryColor, size: 65),
+        children: [
+          SizedBox(height: MediaQuery.of(context).size.height * 0.22),
 
-        const SizedBox(height: 18),
+          Center(
+            child: Container(
+              height: 85,
+              width: 85,
 
-        const Center(
-          child: Text(
-            'No bookings yet',
+              decoration: BoxDecoration(
+                color: primaryColor.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
 
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
+              child: Icon(
+                Icons.calendar_month_rounded,
+                color: primaryColor,
+                size: 40,
+              ),
             ),
           ),
-        ),
 
-        const SizedBox(height: 8),
+          const SizedBox(height: 22),
 
-        Center(
-          child: Text(
-            'Your confirmed services '
-            'will appear here.',
+          const Center(
+            child: Text(
+              'No Bookings Yet',
 
-            style: TextStyle(color: secondaryColor, fontSize: 12),
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ),
-        ),
-      ],
+
+          const SizedBox(height: 9),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 40),
+
+            child: Text(
+              'You have not booked any services yet. '
+              'Book a service and it will appear here.',
+
+              textAlign: TextAlign.center,
+
+              style: TextStyle(
+                color: secondaryColor,
+                fontSize: 12,
+                height: 1.5,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 22),
+
+          Center(
+            child: TextButton.icon(
+              onPressed: refreshBookings,
+
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+
+              label: const Text(
+                'Refresh',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+
+              style: TextButton.styleFrom(foregroundColor: primaryColor),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   // ============================================================
-  // ERROR STATE
+  // BOOKING CARD
   // ============================================================
 
-  Widget _buildError() {
-    return ListView(
-      physics: const AlwaysScrollableScrollPhysics(),
+  Widget _buildBookingCard(dynamic booking, int index) {
+    final providerName = _providerName(booking);
 
-      padding: const EdgeInsets.all(20),
+    final service = _serviceName(booking);
 
-      children: [
-        const SizedBox(height: 120),
+    final date = _formatDate(booking);
 
-        const Icon(
-          Icons.error_outline_rounded,
-          color: Colors.redAccent,
-          size: 55,
-        ),
+    final time = _formatTime(booking);
 
-        const SizedBox(height: 15),
+    final address = _address(booking);
 
-        const Center(
-          child: Text(
-            'Unable to load bookings',
+    final notes = _notes(booking);
 
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
+    final status = _status(booking);
+
+    final bookingId = _getBookingId(booking);
+
+    final firstLetter = providerName.isNotEmpty
+        ? providerName[0].toUpperCase()
+        : 'P';
+
+    final statusColor = _statusColor(status);
+
+    return Container(
+      width: double.infinity,
+
+      margin: const EdgeInsets.only(bottom: 16),
+
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor),
+      ),
+
+      child: Column(
+        children: [
+          // ====================================================
+          // TOP SECTION
+          // ====================================================
+          Padding(
+            padding: const EdgeInsets.fromLTRB(15, 15, 15, 13),
+
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                // ==============================================
+                // PROVIDER AVATAR
+                // ==============================================
+                Container(
+                  height: 50,
+                  width: 50,
+
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      colors: [Color(0xFF216BFF), Color(0xFF604DE4)],
+                    ),
+
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+
+                  child: Center(
+                    child: Text(
+                      firstLetter,
+
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 12),
+
+                // ==============================================
+                // PROVIDER DETAILS
+                // ==============================================
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+
+                    children: [
+                      Text(
+                        providerName,
+
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+
+                      const SizedBox(height: 5),
+
+                      Text(
+                        service.toUpperCase(),
+
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+
+                        style: TextStyle(
+                          color: secondaryColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.4,
+                        ),
+                      ),
+
+                      if (bookingId != null) ...[
+                        const SizedBox(height: 5),
+
+                        Text(
+                          'Booking #$bookingId',
+
+                          style: TextStyle(color: secondaryColor, fontSize: 9),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                // ==============================================
+                // STATUS
+                // ==============================================
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 9,
+                    vertical: 6,
+                  ),
+
+                  decoration: BoxDecoration(
+                    color: statusColor.withValues(alpha: 0.12),
+
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+
+                    children: [
+                      Container(
+                        height: 6,
+                        width: 6,
+
+                        decoration: BoxDecoration(
+                          color: statusColor,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+
+                      const SizedBox(width: 5),
+
+                      Text(
+                        status,
+
+                        style: TextStyle(
+                          color: statusColor,
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
 
-        const SizedBox(height: 8),
+          // ====================================================
+          // DIVIDER
+          // ====================================================
+          Divider(height: 1, color: borderColor),
 
-        Text(
-          error ?? 'Something went wrong',
+          // ====================================================
+          // DATE / TIME
+          // ====================================================
+          Padding(
+            padding: const EdgeInsets.fromLTRB(15, 14, 15, 8),
 
-          textAlign: TextAlign.center,
+            child: Row(
+              children: [
+                Expanded(
+                  child: _infoItem(
+                    icon: Icons.calendar_month_rounded,
+                    label: 'DATE',
+                    value: date,
+                  ),
+                ),
 
-          style: TextStyle(color: secondaryColor, fontSize: 11),
-        ),
+                const SizedBox(width: 12),
 
-        const SizedBox(height: 20),
+                Expanded(
+                  child: _infoItem(
+                    icon: Icons.access_time_rounded,
+                    label: 'TIME',
+                    value: time,
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-        SizedBox(
-          height: 45,
+          // ====================================================
+          // ADDRESS
+          // ====================================================
+          Padding(
+            padding: const EdgeInsets.fromLTRB(15, 8, 15, 8),
 
-          child: ElevatedButton(
-            onPressed: customerEmail.isEmpty ? loadUserEmail : loadBookings,
+            child: _addressItem(address),
+          ),
 
-            style: ElevatedButton.styleFrom(
-              backgroundColor: primaryColor,
+          // ====================================================
+          // NOTES
+          // ====================================================
+          if (notes.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(15, 6, 15, 8),
 
-              foregroundColor: Colors.white,
+              child: _notesItem(notes),
+            ),
 
-              elevation: 0,
+          // ====================================================
+          // CANCEL BUTTON
+          // ====================================================
+          Padding(
+            padding: const EdgeInsets.fromLTRB(15, 8, 15, 15),
 
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(11),
+            child: SizedBox(
+              width: double.infinity,
+              height: 43,
+
+              child: OutlinedButton.icon(
+                onPressed: deleting ? null : () => cancelBooking(booking),
+
+                icon: const Icon(Icons.cancel_outlined, size: 18),
+
+                label: const Text(
+                  'Cancel Booking',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.redAccent,
+
+                  side: BorderSide(
+                    color: Colors.redAccent.withValues(alpha: 0.45),
+                  ),
+
+                  disabledForegroundColor: Colors.redAccent.withValues(
+                    alpha: 0.35,
+                  ),
+
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
 
-            child: const Text(
-              'Try Again',
+  // ============================================================
+  // INFO ITEM
+  // ============================================================
 
-              style: TextStyle(fontWeight: FontWeight.w700),
+  Widget _infoItem({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(11),
+
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B203A),
+        borderRadius: BorderRadius.circular(11),
+      ),
+
+      child: Row(
+        children: [
+          Icon(icon, color: primaryColor, size: 19),
+
+          const SizedBox(width: 9),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Text(
+                  label,
+
+                  style: TextStyle(
+                    color: secondaryColor,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  value,
+
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // ADDRESS ITEM
+  // ============================================================
+
+  Widget _addressItem(String address) {
+    return Container(
+      width: double.infinity,
+
+      padding: const EdgeInsets.all(11),
+
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B203A),
+        borderRadius: BorderRadius.circular(11),
+      ),
+
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          Icon(Icons.location_on_outlined, color: primaryColor, size: 19),
+
+          const SizedBox(width: 9),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Text(
+                  'SERVICE ADDRESS',
+
+                  style: TextStyle(
+                    color: secondaryColor,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  address,
+
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // NOTES ITEM
+  // ============================================================
+
+  Widget _notesItem(String notes) {
+    return Container(
+      width: double.infinity,
+
+      padding: const EdgeInsets.all(11),
+
+      decoration: BoxDecoration(
+        color: const Color(0xFF0B203A),
+        borderRadius: BorderRadius.circular(11),
+      ),
+
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+
+        children: [
+          Icon(Icons.notes_rounded, color: primaryColor, size: 19),
+
+          const SizedBox(width: 9),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+
+              children: [
+                Text(
+                  'ADDITIONAL NOTES',
+
+                  style: TextStyle(
+                    color: secondaryColor,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+
+                const SizedBox(height: 4),
+
+                Text(
+                  notes,
+
+                  maxLines: 4,
+                  overflow: TextOverflow.ellipsis,
+
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
