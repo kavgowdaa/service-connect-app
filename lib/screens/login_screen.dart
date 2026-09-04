@@ -92,10 +92,6 @@ class _LoginScreenState extends State<LoginScreen> {
   // LOAD SAVED CREDENTIALS
   // ============================================================
 
-  // ============================================================
-  // LOAD SAVED CREDENTIALS
-  // ============================================================
-
   Future<void> loadSavedCredentials() async {
     try {
       final savedRemember = await secureStorage.read(key: rememberKey);
@@ -135,6 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
     }
   }
+
   // ============================================================
   // SAVE CREDENTIALS
   // ============================================================
@@ -170,6 +167,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await secureStorage.write(key: 'logged_in', value: 'true');
 
     await secureStorage.write(key: 'user_email', value: email);
+
     await secureStorage.write(key: 'saved_email', value: email);
 
     final user = result['user'];
@@ -220,7 +218,6 @@ class _LoginScreenState extends State<LoginScreen> {
       debugPrint('================================');
 
       final result = await api.login(email: email, password: password);
-      const FlutterSecureStorage secureStorage = FlutterSecureStorage();
 
       final user = result['user'];
 

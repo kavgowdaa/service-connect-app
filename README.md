@@ -1,49 +1,28 @@
-# ServiceConnect - Local Service Booking App 🔧
+# 🔧 ServiceConnect
 
-> Find trusted plumbers, electricians & cleaners near you in Mangaluru / Bangalore - Inspired by Urban Company.
+A Flutter-based service booking application that connects customers with trusted local service professionals.
 
-**Live Demo:** Flutter App + FastAPI Backend
-**Built for:** AGREMATE-style multi-role apps (Tenant / Landlord / Guard)
-
----
-
-### 📸 Screenshots
-
-| Home | Provider Detail | Booking |
-| :---: | :---: | :---: |
-| Home Screen with Services | WoodWorks Detail with Map Card (1.2km) | Booking Flow |
-
-> Add your 2 screenshots in `screenshots/` folder and link them here
+ServiceConnect allows users to discover service providers, view provider details, book services, and manage their bookings through a simple and modern interface.
 
 ---
 
-### 🚀 What I Built (V2 - Aug 30)
+## 📱 Project Overview
 
-**Premium UI (Flutter):**
-- ✅ Provider detail page with shadow container, map location card, rating (4.8★)
-- ✅ Sticky bottom price bar - "₹450/hour • Book Now" like Urban Company
-- ✅ Service description tailored for Tenant/Landlord/PG use-case
-- ✅ Smooth scroll, responsive layout
+ServiceConnect is built using **Flutter** for the frontend and **FastAPI** for the backend.
 
-**Backend (FastAPI):**
-- `GET /providers` - List all service providers
-- `POST /book` - Book a service
-- Runs at `127.0.0.1:8000`
+The application provides a complete service-booking workflow:
 
-**Tech Stack:**
-- **Flutter** & Dart - Frontend
-- **REST API** - FastAPI + JSON
-- **State Management** - Provider (Migrating to Riverpod)
-- **Firebase** - Auth & Firestore (Integration in progress)
-- **Google Maps SDK** - Location & Distance (UI ready, SDK next)
-- **Architecture** - MVVM + Multi-role inspired
-
----
-
-### 🛠️ How to Run
-
-**Backend:**
-```bash
-cd service-connect-backend
-uvicorn main:app --reload
-# API at http://127.0.0.1:8000/docs
+```text
+Login / Register
+       ↓
+Browse Services
+       ↓
+Search Service Providers
+       ↓
+View Provider Details
+       ↓
+Book a Service
+       ↓
+View My Bookings
+       ↓
+Delete Booking

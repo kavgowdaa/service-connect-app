@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/service_provider.dart';
 import '../providers/service_providers_provider.dart';
 import 'provider_details_screen.dart';
-import 'booking_screen.dart';
 import 'my_bookings_screen.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -706,7 +705,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) =>
-                              BookingScreen(provider: provider.toJson()),
+                              ProviderDetailScreen(provider: provider.toJson()),
                         ),
                       );
                     },

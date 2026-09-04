@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../services/api_service.dart';
 
@@ -34,9 +35,13 @@ class _BookingScreenState extends State<BookingScreen> {
   // ============================================================
 
   final Color backgroundColor = const Color(0xFF071A33);
+
   final Color cardColor = const Color(0xFF102846);
+
   final Color borderColor = const Color(0xFF294566);
+
   final Color primaryColor = const Color(0xFF216BFF);
+
   final Color secondaryColor = const Color(0xFF7189AA);
 
   // ============================================================
@@ -44,14 +49,30 @@ class _BookingScreenState extends State<BookingScreen> {
   // ============================================================
 
   DateTime? selectedDate;
+
   TimeOfDay? selectedTime;
 
   bool booking = false;
 
   String customerEmail = '';
+
   String customerName = 'Customer';
 
   bool loadingUser = true;
+
+  // ============================================================
+  // GOOGLE MAP LOCATION
+  // ============================================================
+
+  LatLng get providerLocation {
+    final double latitude =
+        (widget.provider['latitude'] as num?)?.toDouble() ?? 12.9141;
+
+    final double longitude =
+        (widget.provider['longitude'] as num?)?.toDouble() ?? 74.8560;
+
+    return LatLng(latitude, longitude);
+  }
 
   // ============================================================
   // INIT
@@ -61,14 +82,8 @@ class _BookingScreenState extends State<BookingScreen> {
   void initState() {
     super.initState();
 
-    // IMPORTANT:
-    // Load the ACTUAL logged-in user.
     loadUserDetails();
   }
-
-  // ============================================================
-  // LOAD USER DETAILS
-  // ============================================================
 
   // ============================================================
   // LOAD LOGGED-IN USER DETAILS
@@ -76,37 +91,26 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Future<void> loadUserDetails() async {
     try {
-      // ----------------------------------------------------------
-      // FIRST: GET ACTUAL LOGGED-IN EMAIL
-      // ----------------------------------------------------------
-
       String? savedEmail = await secureStorage.read(key: 'user_email');
-
-      // ----------------------------------------------------------
-      // FALLBACK: saved_email
-      // ----------------------------------------------------------
 
       if (savedEmail == null || savedEmail.trim().isEmpty) {
         savedEmail = await secureStorage.read(key: 'saved_email');
       }
 
-      // ----------------------------------------------------------
-      // GET LOGGED-IN USER NAME
-      // ----------------------------------------------------------
-
       final savedName = await secureStorage.read(key: 'user_name');
-
-      // ----------------------------------------------------------
-      // GET LOGIN STATUS
-      // ----------------------------------------------------------
 
       final loggedIn = await secureStorage.read(key: 'logged_in');
 
       debugPrint('==========================================');
+
       debugPrint('BOOKING - CHECKING LOGIN');
+
       debugPrint('LOGGED IN: $loggedIn');
+
       debugPrint('USER EMAIL: $savedEmail');
+
       debugPrint('USER NAME: $savedName');
+
       debugPrint('==========================================');
 
       if (!mounted) return;
@@ -173,7 +177,6 @@ class _BookingScreenState extends State<BookingScreen> {
               surface: Color(0xFF102846),
             ),
           ),
-
           child: child!,
         );
       },
@@ -204,7 +207,6 @@ class _BookingScreenState extends State<BookingScreen> {
               surface: Color(0xFF102846),
             ),
           ),
-
           child: child!,
         );
       },
@@ -354,14 +356,23 @@ class _BookingScreenState extends State<BookingScreen> {
       // ============================================================
 
       debugPrint('==========================================');
+
       debugPrint('CREATING BOOKING');
+
       debugPrint('PROVIDER ID: $providerId');
+
       debugPrint('CUSTOMER NAME: $finalName');
+
       debugPrint('CUSTOMER EMAIL: $finalEmail');
+
       debugPrint('DATE: $serviceDate');
+
       debugPrint('TIME: $serviceTime');
+
       debugPrint('ADDRESS: $address');
+
       debugPrint('NOTES: $notes');
+
       debugPrint('==========================================');
 
       // ============================================================
@@ -379,12 +390,6 @@ class _BookingScreenState extends State<BookingScreen> {
       );
 
       debugPrint('BOOKING SUCCESS: $result');
-
-      // ============================================================
-      // IMPORTANT:
-      // API CALL WAS ASYNC.
-      // CHECK mounted BEFORE USING STATE/CONTEXT.
-      // ============================================================
 
       if (!mounted) return;
 
@@ -410,7 +415,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
       await showDialog<void>(
         context: context,
+
         barrierDismissible: false,
+
         builder: (dialogContext) {
           return AlertDialog(
             backgroundColor: cardColor,
@@ -421,6 +428,7 @@ class _BookingScreenState extends State<BookingScreen> {
 
             content: Column(
               mainAxisSize: MainAxisSize.min,
+
               children: [
                 // ===================================================
                 // SUCCESS ICON
@@ -437,7 +445,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   child: const Icon(
                     Icons.check_rounded,
+
                     color: Color(0xFF35D07F),
+
                     size: 38,
                   ),
                 ),
@@ -449,11 +459,14 @@ class _BookingScreenState extends State<BookingScreen> {
                 // ===================================================
                 const Text(
                   'Booking Confirmed!',
+
                   textAlign: TextAlign.center,
 
                   style: TextStyle(
                     color: Colors.white,
+
                     fontSize: 20,
+
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -472,7 +485,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
                   style: const TextStyle(
                     color: Color(0xFF8DA1BD),
+
                     fontSize: 13,
+
                     height: 1.4,
                   ),
                 ),
@@ -501,7 +516,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
                       style: const TextStyle(
                         color: Color(0xFF4B8BFF),
+
                         fontSize: 12,
+
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -514,6 +531,7 @@ class _BookingScreenState extends State<BookingScreen> {
                 // ===================================================
                 SizedBox(
                   width: double.infinity,
+
                   height: 45,
 
                   child: ElevatedButton(
@@ -523,7 +541,9 @@ class _BookingScreenState extends State<BookingScreen> {
 
                     style: ElevatedButton.styleFrom(
                       backgroundColor: primaryColor,
+
                       foregroundColor: Colors.white,
+
                       elevation: 0,
 
                       shape: RoundedRectangleBorder(
@@ -545,9 +565,7 @@ class _BookingScreenState extends State<BookingScreen> {
       );
 
       // ============================================================
-      // IMPORTANT:
-      // showDialog() IS ALSO ASYNC.
-      // CHECK mounted AGAIN.
+      // GO BACK
       // ============================================================
 
       if (!mounted) return;
@@ -555,14 +573,10 @@ class _BookingScreenState extends State<BookingScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       debugPrint('==========================================');
-      debugPrint('BOOKING ERROR: $e');
-      debugPrint('==========================================');
 
-      // ============================================================
-      // IMPORTANT:
-      // API CALL WAS ASYNC.
-      // CHECK mounted BEFORE USING CONTEXT.
-      // ============================================================
+      debugPrint('BOOKING ERROR: $e');
+
+      debugPrint('==========================================');
 
       if (!mounted) return;
 
@@ -645,6 +659,10 @@ class _BookingScreenState extends State<BookingScreen> {
         ),
       );
     }
+
+    // ==========================================================
+    // MAIN SCREEN
+    // ==========================================================
 
     return Scaffold(
       backgroundColor: backgroundColor,
@@ -850,6 +868,82 @@ class _BookingScreenState extends State<BookingScreen> {
                   ),
                 ),
               ],
+            ),
+
+            const SizedBox(height: 22),
+
+            // ==================================================
+            // PROVIDER LOCATION
+            // ==================================================
+            const Text(
+              'Provider Location',
+
+              style: TextStyle(
+                color: Colors.white,
+
+                fontSize: 17,
+
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+
+            const SizedBox(height: 9),
+
+            // ==================================================
+            // GOOGLE MAP
+            // ==================================================
+            Container(
+              height: 230,
+
+              width: double.infinity,
+
+              decoration: BoxDecoration(
+                color: cardColor,
+
+                borderRadius: BorderRadius.circular(17),
+
+                border: Border.all(color: borderColor),
+              ),
+
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: providerLocation,
+
+                    zoom: 14.5,
+                  ),
+
+                  markers: {
+                    Marker(
+                      markerId: const MarkerId('provider_location'),
+
+                      position: providerLocation,
+
+                      infoWindow: InfoWindow(
+                        title: name,
+
+                        snippet: '$service • Mangaluru',
+                      ),
+                    ),
+                  },
+
+                  zoomControlsEnabled: false,
+
+                  compassEnabled: true,
+
+                  buildingsEnabled: true,
+
+                  mapToolbarEnabled: true,
+
+                  myLocationButtonEnabled: false,
+
+                  trafficEnabled: false,
+
+                  indoorViewEnabled: false,
+                ),
+              ),
             ),
 
             const SizedBox(height: 22),
@@ -1067,11 +1161,8 @@ class _BookingScreenState extends State<BookingScreen> {
 
   Widget _buildInputField({
     required TextEditingController controller,
-
     required IconData icon,
-
     required String hint,
-
     required int maxLines,
   }) {
     return Container(
