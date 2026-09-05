@@ -1,61 +1,107 @@
 # 🔧 ServiceConnect
 
-A modern Flutter service-booking application that connects customers with trusted local service professionals.
+### Flutter Service Booking Application | Flutter • Dart • Riverpod • Firebase • REST APIs • FastAPI • Google Maps
 
-ServiceConnect provides a complete end-to-end booking experience — from authentication and discovering service providers to booking services, viewing bookings, and managing them.
+ServiceConnect is a modern **Flutter-based service booking application** that connects customers with local service professionals.
+
+The project demonstrates an end-to-end mobile application workflow including **authentication, service discovery, provider search and filtering, provider details, location-based navigation, service booking, and booking management**.
+
+The application uses **Flutter and Dart** for the mobile frontend, **Riverpod** for state management, **Firebase Authentication** for user authentication, and a **FastAPI REST backend** with SQLite for booking data.
+
+---
 
 ## 📱 Features
 
 ### 🔐 Authentication
-- User Login and Registration
-- Firebase Authentication
-- Secure authentication flow
+
+* User login and registration
+* Firebase Authentication integration
+* Authentication-aware application flow
+* Clean and user-friendly authentication UI
 
 ### 🏠 Service Discovery
-- Browse available service categories
-- Search service providers
-- Filter providers by service
-- Provider ratings and pricing
-- Detailed provider information
+
+* Browse available service categories
+* Search service providers
+* Filter providers by service type
+* Display provider ratings and pricing
+* View provider descriptions and details
+* Modern card-based service provider interface
+
+### 👨‍🔧 Provider Details
+
+* Dedicated provider details screen
+* Provider service information
+* Pricing and rating information
+* Provider location access
+* Navigation from provider details to booking
+
+### 📍 Google Maps Integration
+
+* Open provider locations using Google Maps
+* Location-based service experience
+* Automatically zoom closer to the selected provider
+* Provider location interaction from the application
 
 ### 📅 Service Booking
-- Select service date
-- Select service time
-- Enter service address
-- Confirm bookings
-- Backend validation through REST APIs
+
+Users can complete a service booking by:
+
+1. Selecting a service provider
+2. Selecting a service date
+3. Selecting a service time
+4. Entering the service address
+5. Confirming the booking
+
+The Flutter application communicates with the backend through REST APIs, with backend-side validation for booking information.
 
 ### 📋 My Bookings
-- View all booked services
-- Display provider and booking details
-- View booking date and time
-- Delete bookings
 
-### 📍 Google Maps
-- Open provider location using Google Maps
-- Automatically zoom closer to the selected provider
-- Location-based service experience
+* View previously created bookings
+* Display provider information
+* Display booking date and time
+* Display service address
+* Manage existing bookings
+* Delete bookings
 
-## 🛠️ Tech Stack
+---
 
-### Frontend
-- Flutter
-- Dart
-- Riverpod
-- Material UI
+# 🏗️ Application Architecture
 
-### Backend
-- FastAPI
-- Python
-- REST APIs
-- SQLite
+```text
+                    ┌─────────────────────┐
+                    │    Flutter App      │
+                    │     Dart / UI       │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │      Riverpod       │
+                    │  State Management   │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │     ApiService      │
+                    │  HTTP REST Client   │
+                    └──────────┬──────────┘
+                               │
+                               │ REST API
+                               ▼
+                    ┌─────────────────────┐
+                    │   FastAPI Backend   │
+                    │       Python        │
+                    └──────────┬──────────┘
+                               │
+                               ▼
+                    ┌─────────────────────┐
+                    │   SQLite Database   │
+                    └─────────────────────┘
+```
 
-### Services & APIs
-- Firebase Authentication
-- Google Maps SDK
-- HTTP REST API integration
+---
 
-## 🏗️ Application Flow
+# 🔄 Application Flow
 
 ```text
 Login / Register
@@ -76,13 +122,49 @@ Select Date & Time
        ↓
 Enter Address
        ↓
-Booking Confirmation
+Confirm Booking
        ↓
 My Bookings
        ↓
 Delete Booking
+```
 
-📂 Project Structure
+---
+
+# 🛠️ Tech Stack
+
+## Frontend
+
+| Technology      | Usage                                         |
+| --------------- | --------------------------------------------- |
+| **Flutter**     | Cross-platform mobile application development |
+| **Dart**        | Application programming language              |
+| **Riverpod**    | State management                              |
+| **Material UI** | Application interface                         |
+| **HTTP**        | REST API communication                        |
+
+## Backend
+
+| Technology  | Usage                |
+| ----------- | -------------------- |
+| **FastAPI** | REST API backend     |
+| **Python**  | Backend development  |
+| **SQLite**  | Booking data storage |
+| **Uvicorn** | ASGI server          |
+
+## Integrations
+
+| Technology                  | Usage                                |
+| --------------------------- | ------------------------------------ |
+| **Firebase Authentication** | User authentication                  |
+| **Google Maps**             | Provider location and map experience |
+| **REST APIs**               | Frontend-backend communication       |
+
+---
+
+# 📂 Project Structure
+
+```text
 service_connect/
 │
 ├── lib/
@@ -108,81 +190,285 @@ service_connect/
 ├── web/
 ├── windows/
 │
+├── test/
 ├── pubspec.yaml
+├── analysis_options.yaml
 └── README.md
-🚀 Getting Started
-Prerequisites
+```
 
-Make sure you have installed:
+---
 
-Flutter SDK
-Dart SDK
-Python
-Android Studio
-Android Emulator or physical Android device
-1. Clone the repository
+# 🔌 REST API Integration
+
+The Flutter frontend communicates with the FastAPI backend through a dedicated `ApiService`.
+
+```text
+Flutter UI
+    ↓
+ApiService
+    ↓
+HTTP Request
+    ↓
+FastAPI
+    ↓
+SQLite
+```
+
+The backend handles service provider and booking operations while the Flutter application handles the user interface and interaction flow.
+
+### API Operations Demonstrated
+
+* Fetch service providers
+* Filter providers by service
+* Create service bookings
+* Retrieve booking information
+* Delete bookings
+* Backend validation
+* Error handling
+
+---
+
+# 📅 Booking Validation
+
+The booking flow includes validation for:
+
+* Service provider selection
+* Service date
+* Service time
+* Service address
+* Backend request formatting
+
+The application formats service time for backend API compatibility using the expected `HH:MM` format.
+
+---
+
+# 🗺️ Location Experience
+
+Google Maps is integrated into the provider experience to make service discovery more realistic.
+
+Users can open the provider's location and the map is automatically positioned closer to the selected provider.
+
+This provides a more practical location-based service-booking experience rather than a purely static provider listing.
+
+---
+
+# 🧪 Testing & Code Quality
+
+Flutter static analysis was used during development.
+
+Run:
+
+```bash
+flutter analyze
+```
+
+Run the application:
+
+```bash
+flutter run
+```
+
+The project was tested on an Android physical device during development.
+
+---
+
+# 🚀 Getting Started
+
+## Prerequisites
+
+Install the following:
+
+* Flutter SDK
+* Dart SDK
+* Python
+* Android Studio
+* Android SDK
+* Android emulator or physical Android device
+* Firebase project
+* Google Maps API configuration
+
+---
+
+## 1. Clone the Repository
+
+```bash
 git clone https://github.com/kavgowdaa/service-connect-app.git
+
 cd service-connect-app
-2. Install Flutter dependencies
+```
+
+---
+
+## 2. Install Flutter Dependencies
+
+```bash
 flutter pub get
-3. Start the FastAPI backend
+```
+
+---
+
+## 3. Configure Firebase
+
+Firebase configuration is required for authentication.
+
+If setting up the project from scratch, configure Firebase for the Flutter application using FlutterFire.
+
+```bash
+flutterfire configure
+```
+
+Then verify the Firebase configuration for your target platform.
+
+---
+
+## 4. Configure Google Maps
+
+Configure the Google Maps API key for the target platform and enable the required Maps SDK.
+
+Do not commit unrestricted or sensitive API credentials to the repository.
+
+---
+
+## 5. Start the FastAPI Backend
 
 Navigate to the backend:
+
+```bash
 cd service-connect-backend
+```
 
-Install dependencies:
+Install the backend dependencies:
+
+```bash
 pip install fastapi uvicorn
+```
 
-Start the server:
+Start the backend:
+
+```bash
 uvicorn main:app --reload
+```
 
-The API will run at:
+The backend runs locally at:
+
+```text
 http://127.0.0.1:8000
-4. Run the Flutter application
+```
 
-From the Flutter project directory:
+---
+
+## 6. Run the Flutter Application
+
+Return to the Flutter project directory:
+
+```bash
+cd ..
+```
+
+Then run:
+
+```bash
 flutter run
+```
 
-🔌 API Integration
-The Flutter application communicates with the FastAPI backend using REST APIs.
+---
 
-Example workflow:
+# 💡 Key Engineering Highlights
 
-Flutter App
+This project demonstrates practical Flutter development concepts including:
+
+* Cross-platform Flutter application development
+* Dart programming
+* Stateful and reusable UI components
+* Riverpod state management
+* Firebase Authentication
+* REST API integration
+* HTTP request handling
+* JSON data handling
+* FastAPI backend integration
+* SQLite data persistence
+* Search and filtering
+* Form handling
+* Date and time selection
+* Backend validation
+* Google Maps integration
+* Location-based UI
+* Navigation between multiple screens
+* CRUD-style booking operations
+* Error handling and debugging
+* Git and GitHub version control
+
+---
+
+# 🎯 Why ServiceConnect?
+
+ServiceConnect was developed as a practical mobile application rather than a collection of isolated screens.
+
+The project focuses on building a realistic user journey:
+
+```text
+Authenticate
      ↓
-ApiService
+Discover
      ↓
-HTTP REST API
+Search
      ↓
-FastAPI Backend
+Explore Provider
      ↓
-SQLite Database
-🧪 Testing
+View Location
+     ↓
+Book
+     ↓
+Manage Booking
+```
 
-Run Flutter static analysis:
-flutter analyze
-Run the application:
-flutter run
+This demonstrates how Flutter can be used to build a complete application that communicates with backend services and external integrations.
 
-🎯 Project Highlights
-Complete service-booking workflow
-Clean Flutter UI
-Riverpod state management
-Firebase authentication
-REST API integration
-FastAPI backend
-SQLite database
-Google Maps integration
-Provider search and filtering
-Booking management
-Date and time validation
-Cross-platform Flutter structure
+---
 
-👩‍💻 Developer
-Kavya Gowda
+# 📸 Application Screens
+
+The application includes screens for:
+
+* 🔐 Login / Registration
+* 🏠 Home / Service Discovery
+* 👨‍🔧 Provider Details
+* 📍 Provider Location
+* 📅 Service Booking
+* 📋 My Bookings
+
+> Screenshots can be added here to showcase the application's UI and booking workflow.
+
+---
+
+# 🌱 Future Improvements
+
+Possible future enhancements include:
+
+* Provider-side application
+* Booking status updates
+* Push notifications
+* Real-time booking updates
+* Provider availability management
+* User profile management
+* Reviews and ratings
+* Payment integration
+* Improved automated testing
+* Production deployment
+
+---
+
+# 👩‍💻 Developer
+
+**Kavya Gowda**
+
 Computer Science Engineering
-Flutter • Dart • Firebase • REST APIs • FastAPI • Python
 
-📄 License
-This project is developed for learning, portfolio, and demonstration purposes.
+**Technologies:**
+Flutter • Dart • Riverpod • Firebase • REST APIs • FastAPI • Python • SQLite • Google Maps • Git • GitHub
 
+---
+
+# 📄 License
+
+This project was developed for **learning, portfolio, and software development demonstration purposes**.
